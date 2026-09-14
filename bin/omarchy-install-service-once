@@ -1,13 +1,18 @@
 #!/bin/bash
 
-# omarchy:summary=Install the ONCE service, enable its background service, and launch the TUI.
+# omarchy:summary=Install ONCE, enable its dinit background service, and launch the TUI.
 # omarchy:requires-sudo=true
 
 echo "Installing ONCE..."
 omarchy-pkg-add once-bin
 
 echo "Enabling ONCE background service..."
-sudo systemctl enable --now once-background.service
+sudo dinitctl enable once-background
+sudo dinitctl start once-background
 
 echo -e "\nLaunching ONCE..."
 sudo once
+if [[ $(< /proc/1/comm) != dinit ]]; then
+  echo "ONCE service integration requires dinit." >&2
+  exit 1
+fi

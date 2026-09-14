@@ -1,0 +1,4 @@
+type = process
+command = /usr/bin/fcitx5 --disable notificationitem
+restart = true
+restart-delay = 2

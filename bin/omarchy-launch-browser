@@ -17,9 +17,7 @@ else
   private_flag="--incognito"
 fi
 
-systemd-run --user --quiet --collect --unit="omarchy-browser-$(date +%s%N)" \
-  --property=StandardOutput=null --property=StandardError=null \
-  uwsm-app -- "$browser_exec" "${@/--private/$private_flag}"
+nohup uwsm-app -- "$browser_exec" "${@/--private/$private_flag}" >/dev/null 2>&1 &
 
 url=""
 for argument in "$@"; do

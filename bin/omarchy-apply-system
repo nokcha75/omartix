@@ -88,7 +88,10 @@ export PATH="$OMARCHY_PATH/bin:$PATH"
 source "$OMARCHY_INSTALL/helpers/logging.sh"
 start_install_log
 
-source "$OMARCHY_INSTALL/config/all.sh"
+# Omartix is a dinit-only distribution. Its finalizer deliberately excludes
+# Omarchy's systemd unit setup and enables package-owned dinit services by
+# their boot.d links instead.
+source "$OMARCHY_INSTALL/dinit/config/all.sh"
 
 if (( defer_provisioning )); then
   omarchy-apply-hardware --defer-provisioning

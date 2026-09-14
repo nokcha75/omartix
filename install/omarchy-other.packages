@@ -2,9 +2,11 @@
 # Utilized by ISO builder to ensure package availability in the ISO
 
 autoconf-archive
-asusctl
 base
 base-devel
+openssh-dinit
+ntp
+userspawn-dinit
 broadcom-wl-dkms
 btrfs-progs
 dkms
@@ -13,25 +15,22 @@ gst-plugin-pipewire
 gtk4-layer-shell
 libpulse
 intel-ipu7-camera
-intel-lpmd
 intel-media-driver
 libva-intel-driver
 libva-nvidia-driver
 limine
 limine-mkinitcpio-hook
-limine-snapper-sync
+limine-snapper-sync-dinit
 linux
 linux-firmware
 linux-headers
 linux-ptl
 linux-ptl-headers
 macbook12-spi-driver-dkms
-nvidia-580xx-dkms
 nvidia-dkms
 nvidia-open-dkms
-nvidia-580xx-utils
 nvidia-utils
-lib32-nvidia-580xx-utils
+nvidia-utils-dinit
 lib32-nvidia-utils
 pipewire
 pipewire-alsa
@@ -41,6 +40,7 @@ qt6-wayland
 snapper
 sof-firmware
 thermald
+thermald-dinit
 webp-pixbuf-loader
 yay-debug
 tuxedo-drivers-nocompatcheck-dkms
@@ -71,7 +71,6 @@ apple-bcm-firmware
 apple-t2-audio-config
 linux-t2
 linux-t2-headers
-t2fanrd
 
 # Framework 16
 qmk-hid

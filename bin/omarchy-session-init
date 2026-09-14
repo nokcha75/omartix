@@ -1,0 +1,18 @@
+#!/bin/bash
+# omarchy:hidden=true
+# omarchy:summary=Initialize the graphical session service environment
+
+set -euo pipefail
+
+# userspawn has already started dinit --user before Hyprland. Give that manager
+# the compositor's environment without invoking a systemd compatibility path.
+if ! dinitctl --user list >/dev/null 2>&1; then
+  echo "omarchy-session-init: dinit user manager is unavailable" >&2
+  exit 1
+fi
+
+while IFS= read -r assignment; do
+  [[ $assignment == *=* ]] || continue
+  dinitctl --user setenv "$assignment"
+done < <(env)
+dbus-update-activation-environment --all

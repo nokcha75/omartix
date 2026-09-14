@@ -4,9 +4,10 @@ if lspci | grep -qi 'nvidia'; then
   [[ -n $KERNEL_PACKAGE ]] && omarchy-pkg-add "$KERNEL_PACKAGE-headers"
 
   if omarchy-hw-nvidia-gsp; then
-    PACKAGES=(nvidia-open-dkms nvidia-utils lib32-nvidia-utils libva-nvidia-driver)
+    PACKAGES=(nvidia-open-dkms nvidia-utils nvidia-utils-dinit lib32-nvidia-utils libva-nvidia-driver)
   elif omarchy-hw-nvidia-without-gsp; then
-    PACKAGES=(nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils)
+    echo "NVIDIA GPUs without GSP firmware are not supported by the official dinit package set; skipping NVIDIA installation."
+    exit 0
   fi
 
   # Bail if no supported GPU

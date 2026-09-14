@@ -10,9 +10,13 @@ set -e
 if omarchy-cmd-present voxtype; then
   echo "Uninstall Voxtype to remove dictation."
 
-  # Remove services
-  systemctl --user disable --now voxtype.service 2>/dev/null || true
-  systemctl --user daemon-reload
+  # Remove the dinit service and its Hyprland start entry.
+  dinitctl --user stop voxtype 2>/dev/null || true
+  rm -f "$HOME/.config/dinit.d/voxtype"
+  hypr_autostart="$HOME/.config/hypr/autostart.lua"
+  if [[ -f $hypr_autostart ]]; then
+    sed -i '\|o\.launch_on_start("dinitctl --user start voxtype")|d' "$hypr_autostart"
+  fi
 
   # Remove packages and configs
   omarchy-pkg-drop voxtype-bin

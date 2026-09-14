@@ -1,0 +1,22 @@
+# Systemd-only historical migrations. Artix first-install configuration and
+# dinit-native services replace these; marking them complete prevents an old
+# upstream migration from invoking systemctl during a later update.
+1781984677.sh
+1782002156.sh
+1782049344.sh
+1784521870.sh
+1784568652.sh
+1784961000.sh
+1784970000.sh
+1785013000.sh
+1785095882.sh
+1785101000.sh
+1785167800.sh
+1785424256.sh
+1785608166.sh
+1786539345.sh
+1786567036.sh
+1787815267.sh
+1788009111.sh
+1788662350.sh
+1788862626.sh

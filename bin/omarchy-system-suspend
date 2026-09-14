@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Suspend through elogind
+
+exec /usr/bin/loginctl suspend

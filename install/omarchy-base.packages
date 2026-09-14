@@ -5,6 +5,7 @@ aether
 alsa-utils
 asdcontrol
 avahi
+avahi-dinit
 bash-completion
 bat
 bluez
@@ -17,10 +18,12 @@ chromium
 clang
 cliamp
 cups
+cups-dinit
 cups-filters
 cups-pk-helper
 ddcutil
 docker
+docker-dinit
 docker-buildx
 docker-compose
 dosfstools
@@ -102,6 +105,7 @@ plocate
 plymouth
 postgresql-libs
 power-profiles-daemon
+power-profiles-daemon-dinit
 python-gobject
 python-poetry-core
 ttfx
@@ -115,6 +119,7 @@ ripgrep
 ruby
 tensaku
 sddm
+sddm-dinit
 slurp
 socat
 starship
@@ -131,6 +136,7 @@ ttf-jetbrains-mono-nerd-basic
 tzupdate
 udiskie
 ufw
+ufw-dinit
 ufw-docker
 unzip
 usage

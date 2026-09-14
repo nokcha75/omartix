@@ -7,6 +7,6 @@ if omarchy-hw-intel; then
   cpu_model=${cpu_model:-0}
   if ((cpu_model >= 42)) && omarchy-battery-present; then
     omarchy-pkg-add thermald
-    sudo systemctl enable thermald.service
+    # thermald-dinit is enabled by the ISO bootstrap.
   fi
 fi

@@ -3,21 +3,19 @@
 # omarchy:summary=Restart audio services and recover stuck USB audio devices.
 # omarchy:examples=omarchy restart audio | omarchy-restart-audio
 
-services=(wireplumber.service pipewire.service pipewire-pulse.service)
+services=(wireplumber pipewire pipewire-pulse)
 
 restart_audio_services() {
   echo -e "Restarting audio services...\n"
 
-  if timeout 25s systemctl --user restart "${services[@]}"; then
+  if timeout 25s dinitctl --user restart "${services[@]}"; then
     return 0
   fi
 
   echo -e "\nAudio services did not restart cleanly. Forcing stuck services down...\n"
-  systemctl --user cancel >/dev/null 2>&1 || true
-  systemctl --user kill --kill-whom=all --signal=KILL "${services[@]}" >/dev/null 2>&1 || true
-  systemctl --user reset-failed "${services[@]}" >/dev/null 2>&1 || true
+  dinitctl --user stop --force "${services[@]}" >/dev/null 2>&1 || true
 
-  timeout 25s systemctl --user start pipewire.service pipewire-pulse.service wireplumber.service
+  timeout 25s dinitctl --user start pipewire pipewire-pulse wireplumber
 }
 
 wpctl_healthy() {

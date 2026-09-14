@@ -1,3 +1,3 @@
 if omarchy-hw-asus-rog; then
-  omarchy-pkg-add asusctl
+  echo "ASUS ROG controls are not included in this dinit build because asusctl requires systemd integration."
 fi

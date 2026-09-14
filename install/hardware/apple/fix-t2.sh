@@ -10,8 +10,11 @@ if lspci -nn | grep "106b:180[12]" >/dev/null; then
     apple-bcm-firmware \
     t2fanrd
 
-  # Enable T2 fan control
-  systemctl enable t2fanrd.service
+  # Enable T2 fan control through its package-owned dinit service.
+  if [[ -e /etc/dinit.d/t2fanrd ]]; then
+    install -d /etc/dinit.d/boot.d
+    ln -sfn ../t2fanrd /etc/dinit.d/boot.d/t2fanrd
+  fi
 
   mkdir -p /etc/modules-load.d
   {

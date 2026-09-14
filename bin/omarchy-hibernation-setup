@@ -112,12 +112,13 @@ if ! swapon --show | grep -q "$SWAP_FILE"; then
   sudo swapon -p 0 "$SWAP_FILE"
 fi
 
-# Ensure keyboard backlight doesn't prevent sleep
-# Install this before writing the resume marker so a failed install remains
-# retryable through the normal setup command.
+# Ensure keyboard backlight doesn't prevent sleep.
+# Elogind owns sleep hooks on Omartix's dinit hosts.
+system_sleep_dir=/usr/lib/elogind/system-sleep
+sudo mkdir -p "$system_sleep_dir"
 if ! install_root_file "$OMARCHY_PATH/default/systemd/system-sleep/keyboard-backlight" \
-  /usr/lib/systemd/system-sleep/keyboard-backlight 0755; then
-  echo "Could not install the keyboard-backlight system-sleep hook" >&2
+  "$system_sleep_dir/keyboard-backlight" 0755; then
+  echo "Could not install the keyboard-backlight sleep hook" >&2
   exit 1
 fi
 

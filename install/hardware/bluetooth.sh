@@ -1,4 +1,4 @@
-systemctl enable bluetooth.service
+# bluetoothd and its dinit boot.d link are owned by the ISO bootstrap.
 
 # AutoEnable stays at its stock default on purpose. It was set to false here to
 # persist the power state, which it never did: BlueZ has no such behaviour, so

@@ -1,0 +1,4 @@
+type = process
+command = /usr/bin/omarchy-system-sleep-monitor --inhibited
+restart = true
+restart-delay = 2

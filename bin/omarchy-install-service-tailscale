@@ -7,14 +7,28 @@ echo -e "\nInstalling Tailscale..."
 omarchy-pkg-add tailscale
 
 echo -e "\nStarting Tailscale..."
-sudo systemctl enable --now tailscaled.service
+if [[ ! -d /etc/dinit.d || $(< /proc/1/comm) != dinit ]]; then
+  echo "Error: the Artix Tailscale integration requires dinit." >&2
+  exit 1
+fi
+omarchy-pkg-add tailscale-dinit
+sudo dinitctl enable tailscaled
+sudo dinitctl start tailscaled
 sudo tailscale up --accept-routes
 
 echo -e "\nAllowing $USER to manage Tailscale..."
 sudo tailscale set --operator="$USER"
 
 echo -e "\nReceiving Taildrop files in $HOME/Downloads..."
-systemctl --user enable --now omarchy-tailscale-receive.service
+install -d "$HOME/.config/dinit.d/boot.d"
+install -Dm644 /dev/stdin "$HOME/.config/dinit.d/omarchy-tailscale-receive" <<'DINIT'
+type = process
+command = /usr/bin/omarchy-tailscale-receive
+restart = true
+restart-delay = 5
+DINIT
+ln -sfn ../omarchy-tailscale-receive "$HOME/.config/dinit.d/boot.d/omarchy-tailscale-receive"
+dinitctl --user start omarchy-tailscale-receive
 
 echo -e "\nAdding Tailscale to the bar..."
 omarchy-plugin-enable omarchy.tailscale

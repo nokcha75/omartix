@@ -5,8 +5,7 @@
 
 # A caller opened after dev link/unlink may disagree with the still-running
 # desktop. The user manager receives Hyprland's environment at session start.
-session_omarchy_path=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^OMARCHY_PATH=//p' | tail -n 1)
-: "${session_omarchy_path:=$OMARCHY_PATH}"
+session_omarchy_path=${OMARCHY_PATH:-/usr/share/omarchy}
 
 CONFIG_DIR="$session_omarchy_path/shell"
 [[ -f $CONFIG_DIR/shell.qml ]] || { echo "Omarchy shell config not found: $CONFIG_DIR" >&2; exit 1; }
@@ -83,7 +82,6 @@ for (( attempt = 0; attempt < 20; attempt++ )); do
     # unit is therefore an unanswered invitation — re-run it so its toast
     # reappears on the new shell. Answered invitations have already exited
     # and been collected, so the glob no longer matches them.
-    systemctl --user try-restart 'omarchy-*-invitation.service' 2>/dev/null || true
     exit 0
   fi
   sleep 0.1

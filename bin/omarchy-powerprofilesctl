@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# omarchy:hidden=true
+# omarchy:summary=Run the configured power profile backend
+
+set -euo pipefail
+
+backend=${OMARCHY_POWERPROFILES_BACKEND:-}
+
+if [[ -z $backend ]]; then
+  if [[ -x /usr/bin/tlpctl ]]; then
+    backend=tlpctl
+  else
+    backend=powerprofilesctl
+  fi
+fi
+
+case "$backend" in
+  tlpctl | powerprofilesctl) ;;
+  *)
+    echo "Unsupported power profile backend: $backend" >&2
+    exit 1
+    ;;
+esac
+
+exec "$backend" "$@"

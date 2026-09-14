@@ -71,7 +71,7 @@ Item {
 
   Process {
     id: powerProfileReadProcess
-    command: ["powerprofilesctl", "get"]
+    command: ["omarchy-powerprofilesctl", "get"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.activePowerProfile = String(text || "").trim()
@@ -79,7 +79,7 @@ Item {
   }
 
   Timer {
-    // powerprofilesctl has no portable monitor subcommand; keep profile changes
+    // The profile backend has no portable monitor subcommand; keep profile changes
     // visible to consumers such as the wallpaper service without requiring the
     // power panel to be open.
     interval: 2000
