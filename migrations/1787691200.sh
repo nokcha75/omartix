@@ -1,10 +1,10 @@
-echo "Skip Chromium's new first-run EULA on machines already on Quattro"
+echo "Skip Chromium's new first-run EULA on existing installations"
 
 # Chromium 151 flipped MasterPrefs::eula_required from false to true, so an
 # unconfigured first run now stops on a blank terms-of-service dialog before the
 # browser opens. Omarchy answers that in the seed it writes next to the Chromium
-# binary, but that seed is only laid down by a fresh install and by the one-time
-# 3.x upgrade, so machines already on Quattro never receive it. Retrofit it here.
+# binary, but that seed is only laid down by a fresh install. Retrofit it on
+# installations created before the seed existed.
 #
 # The literal is deliberately duplicated rather than sourced: a migration repairs
 # the state of its own moment, and must not drift when the seed later changes.

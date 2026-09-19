@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# omarchy:summary=Run a pending desktop reminder
+# omarchy:hidden=true
+
+set -euo pipefail
+
+unit=${1:-}
+[[ $unit =~ ^omarchy-reminder-[0-9]+m-[0-9]+$ ]] || exit 2
+
+reminder_dir="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/reminders"
+service_dir="$HOME/.config/dinit.d"
+meta="$reminder_dir/$unit.meta"
+message_file="$reminder_dir/$unit.message"
+
+while [[ -f $meta ]]; do
+  due=$(<"$meta")
+  [[ $due =~ ^[0-9]+$ ]] || exit 2
+  remaining=$((due - $(date +%s)))
+  ((remaining > 0)) || break
+  sleep "$((remaining > 60 ? 60 : remaining))"
+done
+
+[[ -f $meta ]] || exit 0
+message="Your reminder is due"
+[[ -f $message_file ]] && message=$(<"$message_file")
+omarchy-notification-send -g 󰢌 "Reminder" "$message"
+rm -f "$meta" "$message_file" "$service_dir/$unit"
+omarchy-shell -q omarchy.indicators refresh >/dev/null 2>&1 || true

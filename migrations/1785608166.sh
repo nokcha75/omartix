@@ -1,78 +1,37 @@
+#!/bin/bash
+
 echo "Repair the pre-suspend lock monitor's graphical session environment"
 
-# The old unit started before UWSM finished importing OMARCHY_PATH and
-# WAYLAND_DISPLAY. A full unit retained from before Omarchy 4 also shadows the
-# corrected package unit, so add the lifecycle constraints as a drop-in without
-# discarding any user customizations.
+# The old systemd unit started before UWSM finished importing OMARCHY_PATH and
+# WAYLAND_DISPLAY. Omartix starts the dinit service from omarchy-session-init,
+# after the graphical environment has been imported, so no lifecycle drop-in is
+# required. Preserve a user-written unit, but retire only the enablement and
+# drop-in that Omarchy itself created.
 user_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-sleep_lock_unit="$user_config_home/systemd/user/omarchy-sleep-lock.service"
-sleep_lock_dropin_dir="$user_config_home/systemd/user/omarchy-sleep-lock.service.d"
-sleep_lock_dropin="$sleep_lock_dropin_dir/90-omarchy-session-environment.conf"
+source_service="$OMARCHY_PATH/install/artix/dinit/user/omarchy-sleep-lock"
+service="$user_config_home/dinit.d/omarchy-sleep-lock"
+legacy_wants="$user_config_home/systemd/user/graphical-session.target.wants/omarchy-sleep-lock.service"
+legacy_dropin_dir="$user_config_home/systemd/user/omarchy-sleep-lock.service.d"
+legacy_dropin="$legacy_dropin_dir/90-omarchy-session-environment.conf"
 
-if [[ -f $sleep_lock_unit ]]; then
-  mkdir -p "$sleep_lock_dropin_dir"
-  printf '%s\n' \
-    '[Unit]' \
-    'After=dbus.socket wayland-session-waitenv.service' \
-    'Requires=dbus.socket' \
-    'PartOf=graphical-session.target' \
-    'ConditionEnvironment=OMARCHY_PATH' \
-    'ConditionEnvironment=WAYLAND_DISPLAY' >"$sleep_lock_dropin"
-fi
-
-# With no live user manager there cannot be an inherited monitor to replace.
-# The package unit (and compatibility drop-in, when needed) will be loaded by
-# the fresh manager at the next login.
-user_manager_socket="${XDG_RUNTIME_DIR:-/run/user/$UID}/systemd/private"
-if ! error=$(systemctl --user show-environment 2>&1); then
-  if [[ -S $user_manager_socket ]]; then
-    echo "Could not reach the running user service manager: $error"
-    echo "The pre-suspend lock repair will be retried by omarchy-migrate."
-    exit 1
-  fi
-  exit 0
-fi
-
-if ! error=$(systemctl --user daemon-reload 2>&1); then
-  echo "Could not reload the user service manager: $error"
-  echo "The pre-suspend lock repair will be retried by omarchy-migrate."
+if [[ ! -f $source_service ]]; then
+  echo "Omartix dinit service definition is missing: $source_service" >&2
   exit 1
 fi
 
-if ! graphical_state=$(systemctl --user show --property=ActiveState --value graphical-session.target 2>&1); then
-  echo "Could not inspect graphical-session.target: $graphical_state"
-  echo "The pre-suspend lock repair will be retried by omarchy-migrate."
-  exit 1
-fi
+install -Dm644 "$source_service" "$service"
+rm -f -- "$legacy_wants" "$legacy_dropin"
+rmdir --ignore-fail-on-non-empty "$legacy_dropin_dir" 2>/dev/null || true
 
-if [[ $graphical_state == "active" ]]; then
-  if ! error=$(systemctl --user reset-failed omarchy-sleep-lock.service 2>&1); then
-    echo "Could not reset omarchy-sleep-lock.service: $error"
-    echo "The pre-suspend lock repair will be retried by omarchy-migrate."
-    exit 1
-  elif ! error=$(systemctl --user restart omarchy-sleep-lock.service 2>&1); then
-    echo "Could not restart omarchy-sleep-lock.service: $error"
-    echo "The pre-suspend lock repair will be retried by omarchy-migrate."
-    exit 1
-  elif ! sleep_lock_state=$(systemctl --user show --property=ActiveState --value omarchy-sleep-lock.service 2>&1); then
-    echo "Could not inspect omarchy-sleep-lock.service: $sleep_lock_state"
-    echo "The pre-suspend lock repair will be retried by omarchy-migrate."
-    exit 1
-  elif [[ $sleep_lock_state != "active" ]]; then
-    echo "omarchy-sleep-lock.service did not stay active after restart."
-    echo "The pre-suspend lock repair will be retried by omarchy-migrate."
-    exit 1
-  fi
-else
-  # A pre-fix monitor was not tied to graphical-session.target and can outlive
-  # logout under a lingering user manager. Stop it so the next target start
-  # creates a process with the next graphical session's environment.
-  if ! error=$(systemctl --user stop omarchy-sleep-lock.service 2>&1); then
-    echo "Could not stop stale omarchy-sleep-lock.service: $error"
-    echo "The pre-suspend lock repair will be retried by omarchy-migrate."
-    exit 1
-  elif ! error=$(systemctl --user reset-failed omarchy-sleep-lock.service 2>&1); then
-    echo "Could not reset omarchy-sleep-lock.service: $error"
+# A headless update has no Wayland session to protect. The next graphical login
+# invokes omarchy-session-init and starts the service with the right environment.
+# In a live session, stop any old monitor before starting dinit's replacement;
+# otherwise two monitors can race to lock the screen on suspend.
+if [[ -n ${WAYLAND_DISPLAY:-} ]] && dinitctl --user list >/dev/null 2>&1; then
+  dinitctl --user stop omarchy-sleep-lock >/dev/null 2>&1 || true
+
+  if ! error=$(dinitctl --user start omarchy-sleep-lock 2>&1); then
+    echo "Could not start omarchy-sleep-lock: $error"
     echo "The pre-suspend lock repair will be retried by omarchy-migrate."
     exit 1
   fi

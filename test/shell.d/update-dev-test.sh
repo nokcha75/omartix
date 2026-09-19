@@ -28,8 +28,8 @@ case "$1" in
         echo true
         ;;
       --abbrev-ref)
-        [[ ${TEST_GIT_UPSTREAM:-origin/quattro} != "none" ]] || exit 1
-        echo "${TEST_GIT_UPSTREAM:-origin/quattro}"
+        [[ ${TEST_GIT_UPSTREAM:-origin/main} != "none" ]] || exit 1
+        echo "${TEST_GIT_UPSTREAM:-origin/main}"
         ;;
       *)
         exit 1

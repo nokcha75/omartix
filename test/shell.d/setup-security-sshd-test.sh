@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
 source "$(dirname "$0")/base-test.sh"
 
 test_dir=$(mktemp -d)
@@ -18,9 +19,9 @@ cat >"$stub_bin/omarchy-cmd-missing" <<'STUB'
 #!/bin/bash
 exit 0
 STUB
-cat >"$stub_bin/systemctl" <<'STUB'
+cat >"$stub_bin/dinitctl" <<'STUB'
 #!/bin/bash
-printf 'systemctl %s\n' "$*" >>"${CALL_LOG:?}"
+printf 'dinitctl %s\n' "$*" >>"${CALL_LOG:?}"
 STUB
 cat >"$stub_bin/sshd" <<'STUB'
 #!/bin/bash
@@ -42,6 +43,10 @@ case $1 in
   exit 2
   ;;
 esac
+STUB
+cat >"$stub_bin/hostname" <<'STUB'
+#!/bin/bash
+printf 'omartix-test\n'
 STUB
 cat >"$stub_bin/sudo" <<'STUB'
 #!/bin/bash
@@ -72,6 +77,7 @@ run_setup() {
   mkdir -p "$home" "$root"
   : >"$test_dir/$scenario.calls"
 
+  # shellcheck disable=SC2153
   HOME="$home" TEST_ROOT="$root" CALL_LOG="$test_dir/$scenario.calls" \
     SSHD_SYNTAX_VALID="${SSHD_SYNTAX_VALID:-1}" \
     SSHD_PASSWORD_AUTH="${SSHD_PASSWORD_AUTH:-no}" \
@@ -84,7 +90,7 @@ output=$(run_setup success)
 config="$test_dir/success/root/etc/ssh/sshd_config.d/10-omarchy-hardening.conf"
 grep -qxF "PasswordAuthentication no" "$config" || fail "SSH setup disables password authentication"
 grep -qxF "KbdInteractiveAuthentication no" "$config" || fail "SSH setup disables keyboard-interactive authentication"
-grep -qxF "systemctl reload sshd.service" "$test_dir/success.calls" || fail "SSH setup reloads the validated config"
+grep -qxF "dinitctl restart sshd" "$test_dir/success.calls" || fail "SSH setup restarts the validated dinit service"
 grep -q "Password logins are off" <<<"$output" || fail "SSH setup reports hardening after it succeeds"
 pass "SSH setup authorizes a key and disables password logins"
 
@@ -99,8 +105,8 @@ if SSHD_PASSWORD_AUTH=yes run_setup ineffective >"$test_dir/ineffective.output" 
 fi
 [[ ! -e $test_dir/ineffective/root/etc/ssh/sshd_config.d/10-omarchy-hardening.conf ]] ||
   fail "SSH setup removes an ineffective hardening config"
-! grep -qF "systemctl reload sshd.service" "$test_dir/ineffective.calls" ||
-  fail "SSH setup must not reload ineffective hardening"
+! grep -qF "dinitctl restart sshd" "$test_dir/ineffective.calls" ||
+  fail "SSH setup must not restart ineffective hardening"
 ! grep -q "Password logins are off" "$test_dir/ineffective.output" ||
   fail "SSH setup must not claim ineffective hardening succeeded"
 pass "SSH setup verifies the effective daemon settings"
@@ -110,8 +116,8 @@ if SSHD_SYNTAX_VALID=0 run_setup invalid >"$test_dir/invalid.output" 2>&1; then
 fi
 [[ ! -e $test_dir/invalid/root/etc/ssh/sshd_config.d/10-omarchy-hardening.conf ]] ||
   fail "SSH setup removes a rejected hardening config"
-! grep -qF "systemctl reload sshd.service" "$test_dir/invalid.calls" ||
-  fail "SSH setup must not reload a rejected config"
+! grep -qF "dinitctl restart sshd" "$test_dir/invalid.calls" ||
+  fail "SSH setup must not restart a rejected config"
 ! grep -q "Password logins are off" "$test_dir/invalid.output" ||
   fail "SSH setup must not claim rejected hardening succeeded"
 pass "SSH setup fails safely when sshd rejects the config"

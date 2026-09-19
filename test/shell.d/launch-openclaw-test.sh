@@ -20,6 +20,13 @@ SCRIPT
   chmod +x "$tmp_dir/bin/$stub"
 done
 
+cat >"$tmp_dir/bin/omarchy-openclaw-gateway" <<SCRIPT
+#!/bin/bash
+printf 'omarchy-openclaw-gateway:%s\\n' "\$*" >>"\$TEST_LOG"
+[[ \$1 == start ]] && touch "$tmp_dir/gateway-up"
+SCRIPT
+chmod +x "$tmp_dir/bin/omarchy-openclaw-gateway"
+
 # The retry loop sleeps between polls; a no-op keeps the suite fast.
 printf '#!/bin/bash\n' >"$tmp_dir/bin/sleep"
 chmod +x "$tmp_dir/bin/sleep"
@@ -83,13 +90,13 @@ touch "$HOME/.config/systemd/user/openclaw-gateway.service"
 : >"$TEST_LOG"
 "$ROOT/bin/omarchy-launch-openclaw"
 
-grep -q '^openclaw:gateway install --force$' "$TEST_LOG" ||
-  fail "OpenClaw launch installs a never-enabled gateway before opening the app"
-! grep -q '^openclaw:gateway start$' "$TEST_LOG" ||
-  fail "OpenClaw launch installs a never-enabled gateway before opening the app" "started the half-installed unit instead"
+grep -q '^omarchy-openclaw-gateway:start$' "$TEST_LOG" ||
+  fail "OpenClaw launch starts the Omartix dinit gateway before opening the app"
+! grep -q '^openclaw:gateway \(install\|start\)' "$TEST_LOG" ||
+  fail "OpenClaw launch starts the Omartix dinit gateway before opening the app" "used upstream systemd service management"
 grep -q '^omarchy-launch-webapp:http://127.0.0.1:18789/#cold-start$' "$TEST_LOG" ||
   fail "OpenClaw launch installs a never-enabled gateway before opening the app" "webapp never opened"
-pass "OpenClaw launch installs a never-enabled gateway before opening the app"
+pass "OpenClaw launch starts the Omartix dinit gateway before opening the app"
 
 # An enabled but stopped unit is started, not reinstalled.
 touch "$tmp_dir/gateway-enabled"
@@ -97,10 +104,10 @@ rm -f "$tmp_dir/gateway-up"
 : >"$TEST_LOG"
 "$ROOT/bin/omarchy-launch-openclaw"
 
-grep -q '^openclaw:gateway start$' "$TEST_LOG" ||
+grep -q '^omarchy-openclaw-gateway:start$' "$TEST_LOG" ||
   fail "OpenClaw launch starts a stopped gateway before opening the app"
-! grep -q '^openclaw:gateway install' "$TEST_LOG" ||
-  fail "OpenClaw launch starts a stopped gateway before opening the app" "reinstalled the unit"
+! grep -q '^openclaw:gateway \(install\|start\)' "$TEST_LOG" ||
+  fail "OpenClaw launch starts a stopped gateway before opening the app" "used upstream systemd service management"
 ! grep -q -- '--yes' "$TEST_LOG" ||
   fail "OpenClaw launch starts a stopped gateway before opening the app" "fell back to dashboard --yes"
 grep -q '^omarchy-launch-webapp:http://127.0.0.1:18789/#cold-start$' "$TEST_LOG" ||

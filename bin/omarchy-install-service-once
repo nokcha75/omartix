@@ -7,7 +7,16 @@ echo "Installing ONCE..."
 omarchy-pkg-add once-bin
 
 echo "Enabling ONCE background service..."
-sudo systemctl enable --now once-background.service
+sudo install -Dm644 /dev/stdin /etc/dinit.d/once-background <<'DINIT'
+# Omartix adapter for the systemd unit shipped by once-bin.
+type = process
+command = /usr/bin/env ONCE_NO_SELF_UPDATE=1 /usr/bin/once background run --namespace once
+depends-on = network.target dockerd
+restart = true
+restart-delay = 5
+DINIT
+sudo dinitctl enable once-background
+sudo dinitctl start once-background
 
 echo -e "\nLaunching ONCE..."
 sudo once

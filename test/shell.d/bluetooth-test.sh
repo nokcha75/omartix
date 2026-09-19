@@ -4,7 +4,7 @@ set -euo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
-grep -q '^ConditionPathIsDirectory=/sys/class/bluetooth$' "$ROOT/default/systemd/user/bt-agent.service" || \
+grep -F '[[ -d $bluetooth_path ]] && pgrep -x bluetoothd' "$ROOT/bin/omarchy-session-init" >/dev/null || \
   fail "bt-agent is skipped on machines without Bluetooth hardware"
 pass "bt-agent is skipped on machines without Bluetooth hardware"
 

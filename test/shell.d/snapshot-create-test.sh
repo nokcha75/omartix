@@ -52,6 +52,8 @@ set -e
 (( status != 0 )) || fail "snapshot create fails when Snapper has no configs"
 grep -qF 'No Snapper configs found' <<<"$stderr" ||
   fail "snapshot create reports that no snapshot was created" "$stderr"
+grep -qF 'install/dinit/config/snapper.sh' <<<"$stderr" ||
+  fail "snapshot create points Artix users to the dinit Snapper setup"
 ! grep -q '^snapper -c .* create ' "$test_tmp/calls.log" ||
   fail "snapshot create does not invent a config to snapshot"
 pass "snapshot create fails loudly when Snapper is installed but unconfigured"
@@ -94,11 +96,3 @@ set -e
 grep -qF 'omarchy-snapshot create || (($? == 127))' "$ROOT/bin/omarchy-update" ||
   fail "update ignores only the missing-snapper exit code"
 pass "snapshot create keeps the quiet 127 path for systems without snapper"
-
-# The quattro upgrade runs under set -e, so a failed snapshot has to be warned
-# past there too or it aborts the whole upgrade at the snapshot step.
-grep -qF 'omarchy-snapshot create || (($? == 127))' "$ROOT/bin/omarchy-upgrade-to-quattro" ||
-  fail "upgrade ignores only the missing-snapper exit code"
-grep -qF 'Continuing the upgrade without a snapshot' "$ROOT/bin/omarchy-upgrade-to-quattro" ||
-  fail "upgrade continues past a failed snapshot instead of aborting"
-pass "upgrade to quattro survives a failed snapshot without passing it off"

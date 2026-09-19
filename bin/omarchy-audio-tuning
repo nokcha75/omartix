@@ -20,9 +20,9 @@ host_config_name=omarchy-speaker-tuning.conf
 host_config="$config_home/pipewire/$host_config_name"
 host_source="$OMARCHY_PATH/default/audio/filter-chain-host.conf"
 fragment="$config_home/pipewire/$host_config_name.d/90-tuning.conf"
-unit_name=omarchy-speaker-tuning.service
-unit="$config_home/systemd/user/$unit_name"
-unit_source="$OMARCHY_PATH/default/systemd/user/$unit_name"
+unit_name=omarchy-speaker-tuning
+unit="$config_home/dinit.d/$unit_name"
+boot_link="$config_home/dinit.d/boot.d/$unit_name"
 
 # Earlier revisions loaded the tuning into the daemon, as a WirePlumber smart
 # filter, or into the shared filter-chain.conf.d namespace. Remove all three so
@@ -74,7 +74,7 @@ tuning_match() {
     [[ -r $dir/tuning.conf ]] || continue
 
     unset match_dmi match_sku match_command sink_pattern
-    # shellcheck disable=SC1090
+    # shellcheck disable=SC1090,SC1091
     source "$dir/tuning.conf"
 
     # Deliberately does not look at the live audio graph. The install hooks run in
@@ -111,7 +111,7 @@ tuned_hardware_sink() {
   local dir found
   dir="$(tuning_match)" || return 1
   unset sink_pattern
-  # shellcheck disable=SC1090
+  # shellcheck disable=SC1090,SC1091
   source "$dir/tuning.conf"
   [[ -n ${sink_pattern:-} ]] || return 1
   found="$(sink_matching "$sink_pattern")"
@@ -152,9 +152,23 @@ tuning_downstream_sink() {
 
 easyeffects_running() {
   pactl list sinks short 2>/dev/null | awk '{print $2}' | grep -x easyeffects_sink >/dev/null ||
-    pgrep -u "$(id -u)" -x easyeffects >/dev/null 2>&1 ||
-    systemctl --user is-active --quiet easyeffects.service 2>/dev/null
+    pgrep -u "$(id -u)" -x easyeffects >/dev/null 2>&1
 }
+
+write_dinit_service() {
+  install -d "$config_home/dinit.d" "$config_home/dinit.d/boot.d"
+  cat >"$unit" <<'SERVICE'
+type = process
+command = /usr/bin/pipewire -c omarchy-speaker-tuning.conf
+restart = true
+restart-delay = 2
+depends-on = pipewire wireplumber
+SERVICE
+  ln -sfn "../$unit_name" "$boot_link"
+}
+
+dinit_service_started() { dinitctl --user is-started "$unit_name" >/dev/null 2>&1; }
+dinit_service_enabled() { [[ -L $boot_link ]]; }
 
 # Unloading a daemon-loaded drop-in is the one case that still needs an audio
 # restart, because the daemon only reads its own config at startup.
@@ -190,10 +204,8 @@ case "$action" in
     else
       echo "Installed:    no"
     fi
-    # Both is-active and is-enabled print their answer *and* exit non-zero when
-    # negative, so a "|| echo" fallback prints it twice.
-    host_state="$(systemctl --user is-active "$unit_name" 2>/dev/null)"
-    host_enabled="$(systemctl --user is-enabled "$unit_name" 2>/dev/null)"
+    host_state=inactive; dinit_service_started && host_state=active
+    host_enabled=disabled; dinit_service_enabled && host_enabled=enabled
     echo "Host service: ${host_state:-inactive} (${host_enabled:-disabled})"
     if tuning_present; then
       echo "Tuning sink:  present"
@@ -203,7 +215,7 @@ case "$action" in
     echo "Default sink: $(pactl get-default-sink 2>/dev/null)"
     if dir="$(tuning_match)"; then
       unset description
-      # shellcheck disable=SC1090
+      # shellcheck disable=SC1090,SC1091
       source "$dir/tuning.conf"
       echo "Matches:      ${description:-?} ($(basename "$dir"))"
     else
@@ -220,10 +232,10 @@ case "$action" in
 
     speakers="$(tuned_hardware_sink)" || speakers=""
 
-    systemctl --user disable --now "$unit_name" >/dev/null 2>&1
+    dinitctl --user stop "$unit_name" >/dev/null 2>&1 || true
     rm -f "$fragment" "$host_config" "$unit" "$stale_shared"
     rmdir "$config_home/pipewire/$host_config_name.d" 2>/dev/null
-    systemctl --user daemon-reload >/dev/null 2>&1
+    rm -f "$boot_link"
     drop_stale_daemon_config
 
     for _ in {1..20}; do
@@ -252,7 +264,7 @@ case "$action" in
     }
 
     unset description sink_pattern
-    # shellcheck disable=SC1090
+    # shellcheck disable=SC1090,SC1091
     source "$selected/tuning.conf"
 
     # At first-run the session is up but the sink can still be settling.
@@ -273,7 +285,7 @@ case "$action" in
 EasyEffects is running. It moves any stream that follows the default sink to its
 own sink, so a tuning installed now would be bypassed.
 
-Stop it first:  systemctl --user disable --now easyeffects.service
+Stop it first: quit EasyEffects, then run this command again.
 EOF
       exit 1
     fi
@@ -294,9 +306,8 @@ EOF
     # file would shadow later fixes to the shipped one indefinitely.
     if ((!force)) && [[ -r $fragment ]] && cmp -s "$rendered" "$fragment" &&
       [[ -r $host_config ]] && cmp -s "$host_source" "$host_config" &&
-      [[ -r $unit ]] && cmp -s "$unit_source" "$unit" &&
-      systemctl --user is-active --quiet "$unit_name" 2>/dev/null &&
-      systemctl --user is-enabled --quiet "$unit_name" 2>/dev/null &&
+      [[ -r $unit ]] && grep -Fxq 'command = /usr/bin/pipewire -c omarchy-speaker-tuning.conf' "$unit" &&
+      dinit_service_started && dinit_service_enabled &&
       [[ "$(tuning_downstream_sink)" == "$speaker_sink" ]]; then
       echo "Speaker tuning already current: $description"
       exit 0
@@ -307,10 +318,8 @@ EOF
     rm -f "$stale_shared"
     install -Dm644 "$host_source" "$host_config"
     install -Dm644 "$rendered" "$fragment"
-    install -Dm644 "$unit_source" "$unit"
-    systemctl --user daemon-reload >/dev/null 2>&1
-    systemctl --user enable "$unit_name" >/dev/null 2>&1
-    systemctl --user restart "$unit_name" >/dev/null 2>&1
+    write_dinit_service
+    dinitctl --user restart "$unit_name" >/dev/null 2>&1 || dinitctl --user start "$unit_name" >/dev/null 2>&1
     echo "Installed speaker tuning: $description"
 
     for _ in {1..40}; do
@@ -318,11 +327,11 @@ EOF
       sleep 0.25
     done
     if ! tuning_present; then
-      systemctl --user disable --now "$unit_name" >/dev/null 2>&1
+      dinitctl --user stop "$unit_name" >/dev/null 2>&1 || true
       rm -f "$fragment" "$host_config" "$unit"
-      systemctl --user daemon-reload >/dev/null 2>&1
+      rm -f "$boot_link"
       echo "Tuning sink never appeared, so it was removed. Audio is untouched." >&2
-      echo "Check: systemctl --user status $unit_name" >&2
+      echo "Check: dinitctl --user status $unit_name" >&2
       exit 1
     fi
 
@@ -333,9 +342,9 @@ EOF
     done
     downstream="$(tuning_downstream_sink)"
     if [[ $downstream != "$speaker_sink" ]]; then
-      systemctl --user disable --now "$unit_name" >/dev/null 2>&1
+      dinitctl --user stop "$unit_name" >/dev/null 2>&1 || true
       rm -f "$fragment" "$host_config" "$unit"
-      systemctl --user daemon-reload >/dev/null 2>&1
+      rm -f "$boot_link"
       echo "The tuning output linked to ${downstream:-nothing} instead of" >&2
       echo "$speaker_sink, so it was removed rather than left tuning the wrong" >&2
       echo "device. Audio is untouched." >&2

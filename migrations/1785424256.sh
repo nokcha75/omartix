@@ -1,8 +1,6 @@
-echo "Let systemd-oomd kill a runaway app instead of the whole session"
+#!/bin/bash
 
-# New installs get this from install/config/enable-services.sh. Existing ones
-# have never had an OOM daemon, so nothing stands between memory pressure and
-# the session falling over.
+echo "Let earlyoom protect the desktop from sustained memory exhaustion"
 
 as_root() {
   if (( EUID == 0 )); then
@@ -12,20 +10,25 @@ as_root() {
   fi
 }
 
-# Machine-wide, so a second user on the same box finds it already done.
-if systemctl is-enabled --quiet systemd-oomd.service 2>/dev/null; then
-  # Already enabled means it started before the package delivered our
-  # thresholds in /etc/systemd/oomd.conf.d/, and oomd only reads that at
-  # startup. Restart so it doesn't run with stale limits until reboot.
-  as_root systemctl try-restart systemd-oomd.service >/dev/null 2>&1 || true
-else
-  as_root systemctl enable --now systemd-oomd.service >/dev/null 2>&1 ||
-    echo "Could not enable systemd-oomd.service; memory pressure will still take the session down."
+if ! error=$(omarchy-pkg-add earlyoom earlyoom-dinit 2>&1); then
+  echo "Could not install Artix earlyoom packages: $error"
+  echo "The memory-pressure migration will be retried by omarchy-migrate."
+  exit 1
 fi
 
-# Pick up /usr/lib/systemd/user/app.slice.d/10-oomd.conf without waiting for
-# the next login. That drop-in is what marks app.slice as a kill candidate;
-# until the user manager reloads and reports it, oomd is running with nothing
-# to act on. An `omarchy update` over SSH or from a TTY has no user manager to
-# reload, and there the next graphical login picks it up on its own.
-systemctl --user daemon-reload >/dev/null 2>&1 || true
+if ! error=$(as_root "$OMARCHY_PATH/install/dinit/config/earlyoom.sh" 2>&1); then
+  echo "Could not configure earlyoom: $error"
+  echo "The memory-pressure migration will be retried by omarchy-migrate."
+  exit 1
+fi
+
+if ! error=$(as_root dinitctl enable earlyoom 2>&1); then
+  echo "Could not enable earlyoom: $error"
+  echo "The memory-pressure migration will be retried by omarchy-migrate."
+  exit 1
+fi
+
+# Restarting applies the policy immediately. If it fails, boot.d enablement
+# still applies it on the next boot, so the update remains usable.
+as_root dinitctl restart earlyoom >/dev/null 2>&1 ||
+  echo "earlyoom will start with Omartix policy after the next reboot."

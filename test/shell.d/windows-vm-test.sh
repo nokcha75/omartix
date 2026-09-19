@@ -7,6 +7,14 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 windows_vm_command="$ROOT/bin/omarchy-windows-vm"
 windows_vm_rules="$ROOT/default/hypr/apps/windows-vm.lua"
 
+! rg -q '\b(timedatectl|systemctl)\b' "$windows_vm_command" ||
+  fail "Windows VM does not require systemd commands"
+rg -qF 'readlink -f /etc/localtime' "$windows_vm_command" ||
+  fail "Windows VM derives timezone from the portable zoneinfo link"
+rg -qF 'sudo dinitctl start dockerd' "$windows_vm_command" ||
+  fail "Windows VM names the dinit Docker service in recovery guidance"
+pass "Windows VM uses dinit-compatible timezone and Docker handling"
+
 rg -q '^    restart: "no"$' "$windows_vm_command" ||
   fail "Windows VM uses manual startup by default"
 pass "Windows VM uses manual startup by default"

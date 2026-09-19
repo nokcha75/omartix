@@ -1,18 +1,8 @@
 #!/bin/bash
 
-# omarchy:summary=Install the NordVPN service with optional GUI.
-# omarchy:requires-sudo=true
+# omarchy:summary=Explain NordVPN availability on Omartix.
 
-echo "Installing NordVPN..."
-omarchy-pkg-add nordvpn-bin
-
-echo "Enabling NordVPN daemon..."
-sudo systemctl enable --now nordvpnd
-
-echo "Adding user to nordvpn group..."
-sudo usermod -aG nordvpn "$USER"
-
-echo -e "\nNordVPN installed! After reboot, run 'nordvpn login' to authenticate."
-
-echo
-gum confirm "Reboot now to make NordVPN usable?" && omarchy-system-reboot
+echo "NordVPN is currently unavailable on Omartix." >&2
+echo "Artix provides neither nordvpn-bin nor a maintained nordvpnd dinit service." >&2
+echo "See docs/dinit-compatibility.md for the restoration condition." >&2
+exit 1

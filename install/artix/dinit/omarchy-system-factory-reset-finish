@@ -1,0 +1,7 @@
+# Wipe factory-reset subvolumes before owner provisioning or SDDM starts.
+type = process
+command = /usr/bin/omarchy-system-factory-reset-finish-artix
+before = omarchy-provision-owner
+before = sddm
+restart = false
+log-type = buffer

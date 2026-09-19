@@ -128,7 +128,7 @@ Item {
 
   function openFile(file) {
     if (!file || !file.path) return
-    Quickshell.execDetached(["uwsm-app", "--", "nautilus", "--select", fileUri(String(file.path))])
+    Quickshell.execDetached(["omartix-app", "--", "nautilus", "--select", fileUri(String(file.path))])
   }
 
   function fileUri(path) {

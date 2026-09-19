@@ -54,9 +54,6 @@ PY
 ensure_hermes_stopped
 omarchy-pkg-drop hermes-desktop
 
-# The installer leaves a unit waiting to hand the app the Omarchy theme.
-systemctl --user stop omarchy-hermes-theme.service 2>/dev/null || true
-
 # The mise CLI is the app's predecessor, not the app itself: Hermes Desktop takes
 # it over on install and runs its own runtime instead, so a copy still here is one
 # the app never superseded -- an interrupted install, or the terminal CLI from

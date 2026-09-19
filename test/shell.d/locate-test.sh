@@ -11,7 +11,6 @@ require_command plocate
 python3 - <<'PY'
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import tempfile
 
@@ -22,16 +21,11 @@ def check(condition, description):
     raise SystemExit("not ok - " + description)
   print("ok - " + description, flush=True)
 
-drop_in = root / "default/systemd/system/plocate-updatedb.service.d/10-omarchy.conf"
-directives = [line.strip() for line in drop_in.read_text().splitlines() if line.strip() and not line.startswith("#")]
-check(len(directives) == 3 and directives[:2] == ["[Service]", "ExecStart="] and directives[2].startswith("ExecStart="),
-      "locate drop-in replaces the command and preserves upstream service restrictions")
-command = shlex.split(directives[2].removeprefix("ExecStart="))
 options = ["--prune-bind-mounts=no", "--add-prunepaths=/.snapshots"]
-check(command == ["/usr/bin/updatedb", *options],
-      "locate service runs updatedb directly with fixed Btrfs options")
-check("ConditionACPower=true" in (root / "etc/systemd/system/plocate-updatedb.service.d/ac-only.conf").read_text(),
-      "scheduled locate indexing keeps its AC-power condition")
+check(not (root / "default/systemd/system/plocate-updatedb.service.d/10-omarchy.conf").exists(),
+      "Omartix does not ship a systemd locate drop-in")
+check(not (root / "etc/systemd/system/plocate-updatedb.service.d/ac-only.conf").exists(),
+      "Omartix does not modify a systemd locate timer")
 check(not (root / "install/config/locate.sh").exists() and not (root / "migrations/1784809451.sh").exists(),
       "the retired locate configuration helper and migration are absent")
 for directory in ("bin", "install", "migrations"):

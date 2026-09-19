@@ -1,0 +1,5 @@
+type = process
+command = /usr/bin/fcitx5 --disable notificationitem
+depends-on = dbus
+restart = true
+restart-delay = 2

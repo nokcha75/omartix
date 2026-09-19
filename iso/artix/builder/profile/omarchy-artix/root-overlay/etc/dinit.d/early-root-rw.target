@@ -1,0 +1,4 @@
+# The live root is already an overlayfs mounted read-write by artix-live.
+# A remount,rw of the overlay root is unsupported and would abort the boot
+# graph, so mark the root-write phase complete without remounting it.
+type = internal

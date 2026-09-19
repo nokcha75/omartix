@@ -3,6 +3,12 @@
 How `omarchy/` is organized and where everything ends up on an installed
 system.
 
+> **Omartix note:** this page largely documents the upstream Omarchy layout.
+> Omartix publishes a single dinit+elogind core package instead; upstream
+> systemd and UWSM paths mentioned below are excluded from that package. See
+> `packaging/README.md` and `docs/dinit-compatibility.md` for the maintained
+> Omartix boundary.
+
 ## Mental model
 
 Two Arch packages are built from this one repo (PKGBUILDs live in the
@@ -95,12 +101,16 @@ applications/icons/*           ──►  omarchy-settings    /usr/share/icons/h
 
 etc/**                         ──►  omarchy-settings    /etc/**           (drop-ins we own outright)
   ├─ mkinitcpio.conf.d/{omarchy_hooks,thunderbolt_module}.conf
-  ├─ limine-entry-tool.d/{omarchy-defaults,omarchy-uki}.conf
+  ├─ limine-entry-tool.d/omarchy-defaults.conf
   ├─ NetworkManager/, sudoers.d/, sysctl.d/, tmpfiles.d/,
   │  profile.d/omarchy.sh, …                            (a summary — `ls etc/` for the full ~17-entry tree)
-  └─ security/faillock.conf, nsswitch.conf,
-     cups/cups-browsed.conf, plymouth/plymouthd.conf    /usr/share/omarchy/etc-overrides/
-                                                          → /etc/* (post_install cp -f, see below)
+  └─ (upstream-owned files are not placed here; see
+     etc-overrides/ below)
+
+etc-overrides/{nsswitch.conf,security-faillock.conf,
+  cups-cups-files.conf,plymouth-plymouthd.conf}          ──►  omartix
+                                                        /usr/share/omarchy/etc-overrides/
+                                                          → /etc/* (post-install copy, see below)
 
 default/limine/limine.conf     ──►  omarchy-settings    /usr/share/omarchy/default/limine/limine.conf
 default/limine/default.conf    ──►  omarchy-settings    /usr/share/omarchy/default/limine/default.conf
@@ -123,10 +133,6 @@ default/**                     ──►  omarchy-settings    /usr/share/omarchy
   │                                                       + symlink /etc/fonts/conf.d/50-omarchy.conf
   ├─ xdg-terminal-exec/*.list                           /usr/share/xdg-terminal-exec/
   ├─ applications/mimeapps.list                         /usr/share/applications/mimeapps.list
-  ├─ systemd/user/*.service                             /usr/lib/systemd/user/
-  ├─ systemd/user/app.slice.d/10-oomd.conf              /usr/lib/systemd/user/app.slice.d/
-  ├─ systemd/system-sleep/unmount-fuse                  /usr/lib/systemd/system-sleep/
-  ├─ systemd/zram-generator.conf.d/90-omarchy.conf      /usr/lib/systemd/zram-generator.conf.d/
   ├─ fonts/omarchy/omarchy.ttf                          /usr/share/fonts/omarchy/
   ├─ sddm/omarchy/                                      /usr/share/sddm/themes/omarchy/
   ├─ sddm/hyprland.lua                                  /usr/share/sddm/hyprland.lua
@@ -139,28 +145,34 @@ logo.{txt,svg}, icon.{txt,png}  ──► omarchy-settings    /usr/share/omarchy
                                                         /etc/skel/.config/omarchy/branding/{about,screensaver}.txt
 ```
 
-The hardware-conditional `force-igpu` and `keyboard-backlight` sources also live under `default/systemd/system-sleep/`, but their setup commands publish root-owned copies only on machines that need them; they are not installed by `omarchy-settings`.
+The hardware-conditional `keyboard-backlight` source lives under
+`default/elogind/system-sleep/`. Its hibernation setup publishes a root-owned
+copy only on machines that need it; it is not installed by `omarchy-settings`.
+
+Omartix deliberately does not ship Omarchy's `omarchy-uki.conf` drop-in.
+That file forces the systemd UKI toolchain; the Artix+dinit install path uses
+Limine entries with mkinitcpio-generated kernel and initramfs files instead.
 
 ### Why `etc-overrides/` exists
 
 Some files under `/etc/` (`.bashrc` in `/etc/skel`, `nsswitch.conf`,
-`security/faillock.conf`, `cups/cups-browsed.conf`, `plymouth/plymouthd.conf`)
-are owned by upstream Arch packages, so we can't install over them via pacman
-without a file conflict. Instead their sources (under `etc/` in the repo;
-`.bashrc` from `default/bashrc`) ship at
-`/usr/share/omarchy/etc-overrides/` and the `omarchy-settings` `post_install`
-/ `post_upgrade` scriptlet `cp -f`'s them into place.
+`security/faillock.conf`, `cups/cups-files.conf`, and
+`plymouth/plymouthd.conf`) are owned by upstream packages, so Omartix cannot
+install over them via pacman without a file conflict. Their sources therefore
+live directly in `etc-overrides/` (with `.bashrc` from `default/bashrc`) and
+ship at `/usr/share/omarchy/etc-overrides/`. The installer copies them into
+place only after pacman has installed the owning package.
 
-Tradeoff: user edits to those files get clobbered on every `omarchy-settings`
-upgrade. This is documented in the PKGBUILD.
+Tradeoff: user edits to those files get clobbered whenever the Omartix
+post-install finalizer is run. This is documented in the PKGBUILD.
 
 ## Locate indexing
 
-`default/systemd/system/plocate-updatedb.service.d/10-omarchy.conf` ships through `omarchy-settings` to `/usr/lib/systemd/system/plocate-updatedb.service.d/10-omarchy.conf`. It replaces the existing service's `ExecStart` with `updatedb --prune-bind-mounts=no --add-prunepaths=/.snapshots`, keeping Btrfs subvolume mounts searchable and excluding Snapper snapshots. The upstream service retains its timer, resource limits, and sandbox; Omarchy's existing AC-power condition still applies.
-
-`/etc/updatedb.conf` remains owned by plocate and is never rewritten by Omarchy. The command-line options override bind-mount pruning and add to the administrator's existing path exclusions. Installer and AUR package refreshes pass the same options directly because installation may run without systemd and an explicitly requested refresh should work on battery.
-
-Arch's systemd package hook reloads units when the vendor drop-in is installed or upgraded. The settings package containing the drop-in must ship alongside the runtime package that removes the old configuration helper and migration. Pacman removes those retired files; no new state migration is needed. A running indexer finishes with its original options, and subsequent service starts use the drop-in. For an immediate local test after installing the packages, restart `plocate-updatedb.service` while connected to AC power.
+`/etc/updatedb.conf` remains owned by plocate and is never rewritten by
+Omartix. Explicit index refreshes during installation and AUR package refreshes
+run `updatedb --prune-bind-mounts=no --add-prunepaths=/.snapshots` directly.
+There is no Omartix-owned scheduled-indexing service or systemd drop-in; Artix's
+packaged scheduler, if enabled by the administrator, remains unmodified.
 
 ## Env bootstrap (`default/bash/env-bootstrap`)
 
@@ -301,15 +313,16 @@ Completion markers live under `~/.local/state/omarchy/done/`. Use
 `omarchy-done check <name>` to check one and `omarchy-done mark <name>` to record it.
 Use `omarchy-done ensure <name>` as a conditional when the guarded work should
 run only once; it records completion before returning success.
-The Quattro upgrade completes graphical first-run for upgraded users and moves
-the legacy finalization marker from `~/.local/state/omarchy/` into `done/`.
+The first-run flow records its completed steps under this directory. Older
+completion markers under `~/.local/state/omarchy/` are recognized by the
+migration runner when present.
 
 ## Root-side install orchestration
 
 `omarchy-apply-system` (root, in chroot) runs target-side setup at ISO
 finalization. It sources:
 
-- `install/config/all.sh` — theme links, lockout limits, lockscreen PAM,
+- `install/dinit/config/all.sh` — theme links, lockout limits, lockscreen PAM,
   powerprofilesctl shebang fix, SSH command path and keepalive, docker setup,
   Snapper retention, locate index tuning, service enablement, firewall.
 - `install/hardware/all.sh` via `omarchy-apply-hardware` — vendor- and
@@ -350,11 +363,11 @@ return to the packaged default.
 | --- | --- |
 | Default file at `~/.config/foo/` | `config/foo/` |
 | `/etc/` drop-in we own outright | `etc/` |
-| `/etc/` file owned by an upstream package | `etc/` (see `etc/security/faillock.conf`), then add to `etc-overrides` in `omarchy-settings` PKGBUILD + scriptlet |
-| Package-owned system file (e.g. systemd user service in `/usr/lib`) | `default/`, then add the `install -Dm644` line in `omarchy-settings` PKGBUILD |
-| Per-user file that's static but lives outside `~/.config` | `default/`, then add `install -Dm644 ... $pkgdir/etc/skel/...` in `omarchy-settings` PKGBUILD |
+| `/etc/` file owned by an upstream package | `etc-overrides/`, then apply it after the owning package is installed in `install/post-install/pacman.sh` |
+| Package-owned system file (e.g. a dinit user service in `/usr/lib`) | `default/`, then add the `install -Dm644` line in the `omartix` PKGBUILD |
+| Per-user file that's static but lives outside `~/.config` | `default/`, then add `install -Dm644 ... $pkgdir/etc/skel/...` in the `omartix` PKGBUILD |
 | Runtime tweak that needs `$HOME` or live system state | extend `omarchy-provision-user`, or add a per-user leaf under `install/user/` and wire into `install/user/all.sh` |
-| One-time root-side setup step | `install/config/*.sh` or `install/hardware/*.sh`, wire into `install/config/all.sh` or `install/hardware/all.sh` |
+| One-time root-side setup step | `install/dinit/config/*.sh` or `install/hardware/*.sh`, wire into `install/dinit/config/all.sh` or `install/hardware/all.sh` |
 | One-time fix for existing installs | `migrations/<unix-timestamp>.sh` |
 | Package-owned path something else may already write | Prefer a path nothing else writes, such as a vendor drop-in under `/usr/lib`. Otherwise the `--overwrite` entry in `bin/omarchy-update-system-pkgs` has to ship a release before the file |
 | User-facing `omarchy-*` command | `bin/omarchy-<group>-<verb>` — see `GROUP_DESCRIPTIONS` in `bin/omarchy` |

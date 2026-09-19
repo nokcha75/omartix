@@ -1,3 +1,7 @@
+#!/bin/bash
+
+set -euo pipefail
+
 echo "Temporarily remove automatic printer discovery"
 
 machine_marker="${OMARCHY_CUPS_BROWSED_REMOVAL_MARKER:-/var/lib/omarchy/migrations/1788009111}"
@@ -8,13 +12,9 @@ omarchy-pkg-present cups-browsed || exit 0
 # Check the full removal transaction before changing the service or queues.
 pacman -Rs --print cups-browsed >/dev/null
 
-# Disable the unit while its package still owns the unit file so systemd can
-# remove the enable symlink cleanly.
-if systemctl is-enabled --quiet cups-browsed.service 2>/dev/null; then
-  sudo systemctl disable --now cups-browsed.service >/dev/null
-elif systemctl is-active --quiet cups-browsed.service 2>/dev/null; then
-  sudo systemctl stop cups-browsed.service >/dev/null
-fi
+# Artix has no maintained cups-browsed dinit service. Terminate any legacy or
+# manually started process before removing the package that owns it.
+sudo pkill -x cups-browsed 2>/dev/null || true
 
 # cups-browsed leaves its implicitclass queues behind when stopped. Remove idle
 # discovery queues before removing the backend they require, but leave queues

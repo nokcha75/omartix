@@ -1,0 +1,5 @@
+type = process
+command = /usr/bin/omarchy-crash-watch
+depends-on = dbus
+restart = true
+restart-delay = 5

@@ -5,31 +5,21 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 timezone_menu="$ROOT/bin/omarchy-menu-timezone"
-sudoers_file="$ROOT/etc/sudoers.d/omarchy-tzupdate"
 
-grep -F '%wheel ALL=(root) NOPASSWD: /usr/bin/timedatectl ^set-timezone [A-Za-z0-9_+][A-Za-z0-9_+.-]*(/[A-Za-z0-9_+][A-Za-z0-9_+.-]*)*$' "$sudoers_file" >/dev/null ||
-  fail "timezone sudoers rule allows passwordless timedatectl timezone changes"
+! rg -n '\btimedatectl\b|\bsystemctl\b|systemd-timesyncd' "$timezone_menu" ||
+  fail "timezone menu has no systemd dependency"
 
-! grep -F 'set-timezone *' "$sudoers_file" >/dev/null ||
-  fail "timezone sudoers rule uses a bare wildcard that admits extra arguments like -H and -M"
+grep -F "awk '\$1 !~ /^#/ && NF >= 3 {print \$3}' /usr/share/zoneinfo/zone.tab" "$timezone_menu" >/dev/null ||
+  fail "timezone menu lists IANA zones from zoneinfo"
 
-! grep -F 'tzupdate' "$sudoers_file" >/dev/null ||
-  fail "timezone sudoers rule does not grant passwordless tzupdate"
+grep -F '[[ -e "/usr/share/zoneinfo/$timezone" ]]' "$timezone_menu" >/dev/null ||
+  fail "timezone menu validates the selected zone"
 
-grep -F 'sudo timedatectl set-timezone "$timezone"' "$timezone_menu" >/dev/null ||
-  fail "timezone menu uses the passwordless sudoers timedatectl rule"
+grep -F 'sudo ln -sfn "/usr/share/zoneinfo/$timezone" /etc/localtime' "$timezone_menu" >/dev/null ||
+  fail "timezone menu updates localtime through sudo"
 
-! grep -F 'pkexec timedatectl set-timezone "$timezone"' "$timezone_menu" >/dev/null ||
-  fail "timezone menu does not wrap timedatectl in pkexec"
-
-! grep -F 'pkexec /usr/bin/timedatectl set-timezone "$timezone"' "$timezone_menu" >/dev/null ||
-  fail "timezone menu does not wrap timedatectl in pkexec"
-
-! grep -F 'sudo /usr/bin/timedatectl set-timezone "$timezone"' "$timezone_menu" >/dev/null ||
-  fail "timezone menu lets sudo resolve timedatectl from its secure path"
-
-! grep -Fx 'timedatectl set-timezone "$timezone"' "$timezone_menu" >/dev/null ||
-  fail "timezone menu does not use bare timedatectl, which triggers polkit"
+grep -F "printf '%s\\n' \"\$timezone\" | sudo tee /etc/timezone >/dev/null" "$timezone_menu" >/dev/null ||
+  fail "timezone menu records the selected zone"
 
 grep -F 'omarchy-shell -q omarchy.clock refresh' "$timezone_menu" >/dev/null ||
   fail "timezone menu refreshes the namespaced clock IPC target"

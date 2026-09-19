@@ -33,11 +33,6 @@ cat >"$tmp_dir/tzupdate" <<'EOF'
 printf '%s\n' "$TZ_GUESS"
 EOF
 
-cat >"$tmp_dir/timedatectl" <<'EOF'
-#!/bin/bash
-printf '%s\n' UTC Europe/Copenhagen America/Chicago
-EOF
-
 # Calls one prompt bare under `set -euo pipefail` — the shape that makes the
 # status capture load-bearing. A cancelled prompt is a failing assignment, so a
 # regression to a plain `status=$?` kills the shell before the function can
@@ -72,7 +67,7 @@ printf 'hostname=%s\n' "${hostname:-}"
 printf 'timezone=%s\n' "${timezone:-}"
 EOF
 
-chmod +x "$tmp_dir/gum" "$tmp_dir/tzupdate" "$tmp_dir/timedatectl" "$tmp_dir/driver"
+chmod +x "$tmp_dir/gum" "$tmp_dir/tzupdate" "$tmp_dir/driver"
 export PATH="$tmp_dir:$PATH"
 export GUM_DIR="$tmp_dir" GUM_SCRIPT="$tmp_dir/script" GUM_ARGS="$tmp_dir/args" GUM_COUNT="$tmp_dir/count"
 export NOTICES="$tmp_dir/notices" MARKER="$tmp_dir/marker"

@@ -88,7 +88,9 @@ export PATH="$OMARCHY_PATH/bin:$PATH"
 source "$OMARCHY_INSTALL/helpers/logging.sh"
 start_install_log
 
-source "$OMARCHY_INSTALL/config/all.sh"
+# Omartix keeps Omarchy's finalization order, but service activation belongs to
+# Artix's dinit/elogind layer rather than to the upstream systemd finalizer.
+source "$OMARCHY_INSTALL/dinit/config/all.sh"
 
 if (( defer_provisioning )); then
   omarchy-apply-hardware --defer-provisioning

@@ -185,7 +185,7 @@ mkdir -p "$caller_root/shell"
 touch "$caller_root/shell/shell.qml"
 
 PATH="$restart_bin:$PATH" \
-OMARCHY_PATH="$caller_root" \
+OMARCHY_PATH="$restart_root" \
 XDG_RUNTIME_DIR="$runtime_dir" \
 OMARCHY_TEST_QS_STATE="$restart_state" \
 OMARCHY_TEST_QS_LOG="$restart_log" \
@@ -213,6 +213,10 @@ grep -F "kill -p $restart_root/shell --any-display" "$restart_log" >/dev/null ||
 grep -F 'hl.dsp.exec_cmd("omarchy-launch-shell")' "$dispatch_log" >/dev/null || fail "restart launches the fresh shell through Hyprland"
 grep -F "ipc -n -p $restart_root/shell call -- shell ping" "$ipc_log" >/dev/null || fail "restart checks readiness in the session checkout"
 pass "restart replaces duplicate shell instances from the session checkout"
+
+! rg -q '\bsystemctl\b' "$ROOT/bin/omarchy-restart-shell" ||
+  fail "shell restart has no systemd user-manager dependency"
+pass "shell restart uses the dinit session environment"
 
 : >"$restart_log"
 printf '303\n' >"$restart_state"

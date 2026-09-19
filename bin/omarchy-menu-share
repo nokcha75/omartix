@@ -41,8 +41,9 @@ else
   readarray -t FILE_ARRAY <<<"$picked"
 fi
 
-# Run LocalSend in its own systemd service (detached from terminal)
-systemd-run --user --quiet --collect localsend --headless send "${FILE_ARRAY[@]}"
+# LocalSend headless transfers are ordinary detached processes, not dinit user
+# services. Keep the terminal responsive while the transfer continues.
+nohup localsend --headless send "${FILE_ARRAY[@]}" >/dev/null 2>&1 &
 
 # Note: Temporary file will remain until system cleanup for clipboard mode
 # This ensures the file content is available for the LocalSend GUI

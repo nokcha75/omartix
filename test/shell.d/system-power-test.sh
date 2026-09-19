@@ -9,15 +9,15 @@ mock_bin="$test_tmp/bin"
 call_log="$test_tmp/calls.log"
 mkdir -p "$mock_bin"
 
-cat >"$mock_bin/systemd-run" <<'SH'
+cat >"$mock_bin/nohup" <<'SH'
 #!/bin/bash
 
-printf 'systemd-run %s\n' "$*" >>"$CALL_LOG"
-[[ ${FAIL_SYSTEMD_RUN:-false} == "true" ]] && exit 1
+printf 'nohup %s\n' "$*" >>"$CALL_LOG"
+[[ ${FAIL_NOHUP:-false} == "true" ]] && exit 1
 exit 0
 SH
 
-for command in omarchy-state omarchy-hyprland-window-close-all sleep; do
+for command in omarchy-osd omarchy-state omarchy-hyprland-window-close-all sleep; do
   cat >"$mock_bin/$command" <<'SH'
 #!/bin/bash
 
@@ -35,18 +35,17 @@ run_power_command() {
 
 assert_power_calls() {
   local action="$1"
-  local systemctl_action="$2"
-  local expected_log="$test_tmp/$action-expected.log"
+  local loginctl_action="$2"
 
-  cat >"$expected_log" <<EOF
-systemd-run --user --collect --quiet --on-active=2s --timer-property=AccuracySec=100ms systemctl $systemctl_action --no-wall
-omarchy-state clear re*-required
-omarchy-hyprland-window-close-all 
-sleep 1
-EOF
-
-  diff -u "$expected_log" "$call_log" || fail "$action runs after being scheduled outside the terminal scope"
-  pass "$action runs after being scheduled outside the terminal scope"
+  grep -Fx "nohup /usr/bin/sh -c sleep 2; exec /usr/bin/loginctl $loginctl_action" "$call_log" >/dev/null ||
+    fail "$action schedules elogind outside the terminal"
+  grep -Fx 'omarchy-state clear re*-required' "$call_log" >/dev/null ||
+    fail "$action clears pending restart state"
+  grep -Fx 'omarchy-hyprland-window-close-all ' "$call_log" >/dev/null ||
+    fail "$action closes application windows"
+  grep -Fx 'sleep 1' "$call_log" >/dev/null ||
+    fail "$action leaves applications a short shutdown grace period"
+  pass "$action runs after being scheduled outside the terminal"
 }
 
 run_power_command reboot
@@ -55,14 +54,15 @@ assert_power_calls reboot reboot
 run_power_command shutdown
 assert_power_calls shutdown poweroff
 
-for action in reboot shutdown; do
-  : >"$call_log"
-  if PATH="$mock_bin:$PATH" CALL_LOG="$call_log" FAIL_SYSTEMD_RUN=true "$ROOT/bin/omarchy-system-$action"; then
-    fail "$action aborts when scheduling fails"
-  fi
-
-  if (( $(wc -l <"$call_log") != 1 )); then
-    fail "$action leaves state and windows alone when scheduling fails"
-  fi
-  pass "$action leaves state and windows alone when scheduling fails"
+for action in suspend hibernate; do
+  grep -Fx "exec /usr/bin/loginctl $action" "$ROOT/bin/omarchy-system-$action" >/dev/null ||
+    fail "$action delegates to elogind"
 done
+pass "suspend and hibernate delegate to elogind"
+
+menu="$ROOT/default/omarchy/omarchy-menu.jsonc"
+grep -F '"action":"omarchy-system-suspend"' "$menu" >/dev/null ||
+  fail "menu suspend action uses Omartix wrapper"
+grep -F '"action":"omarchy-system-hibernate"' "$menu" >/dev/null ||
+  fail "menu hibernate action uses Omartix wrapper"
+pass "power menu preserves the Omarchy commands through dinit wrappers"

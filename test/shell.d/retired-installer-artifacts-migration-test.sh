@@ -21,16 +21,6 @@ printf 'sudo %s\n' "$*" >>"$CALLS"
 exec "$@"
 STUB
 
-cat >"$test_dir/bin/systemctl" <<'STUB'
-#!/bin/bash
-
-printf 'systemctl %s\n' "$*" >>"$CALLS"
-if [[ $* == "daemon-reload" && -n ${FAIL_DAEMON_RELOAD_ONCE_MARKER:-} && ! -e $FAIL_DAEMON_RELOAD_ONCE_MARKER ]]; then
-  touch "$FAIL_DAEMON_RELOAD_ONCE_MARKER"
-  exit 1
-fi
-STUB
-
 chmod +x "$test_dir/bin/"*
 
 # A second stub directory where sudo cannot elevate, standing in for a run with
@@ -42,7 +32,6 @@ cat >"$test_dir/failing-bin/sudo" <<'STUB'
 echo "sudo: a terminal is required to read the password" >&2
 exit 1
 STUB
-cp "$test_dir/bin/systemctl" "$test_dir/failing-bin/systemctl"
 chmod +x "$test_dir/failing-bin/"*
 
 export CALLS="$test_dir/calls"
@@ -54,10 +43,9 @@ first_run="$sudoers_dir/first-run"
 tsui="$sudoers_dir/tsui"
 plymouth_unit="$systemd_dir/omarchy-plymouth-shutdown.service"
 machine_marker="$test_dir/machine-marker"
-reload_needed_marker="$machine_marker.daemon-reload"
 
 reset_machine() {
-  rm -rf "$sudoers_dir" "$systemd_dir" "$home_dir" "$machine_marker" "$reload_needed_marker"
+  rm -rf "$sudoers_dir" "$systemd_dir" "$home_dir" "$machine_marker"
   mkdir -p "$sudoers_dir" "$systemd_dir" "$home_dir"
 }
 
@@ -75,11 +63,11 @@ run_migration() {
 # /etc/sudoers.d is 0750 root:root on a real machine, so the migration has to
 # escalate merely to see whether either grant is there. An empty call log is
 # therefore the wrong invariant: what must be absent unless a file really is
-# Omarchy's is a removal, or a unit being disabled or reloaded.
+# Omarchy's is a removal.
 assert_changed_nothing() {
   local label="$1"
 
-  ! grep -qE '^(sudo rm|systemctl disable|systemctl daemon-reload)' "$CALLS" ||
+  ! grep -q '^sudo rm' "$CALLS" ||
     fail "$label" "$(cat "$CALLS")"
   pass "$label"
 }
@@ -325,20 +313,11 @@ run_migration
   fail "migration removes the shutdown unit that runs out of a user home"
 pass "migration removes the shutdown unit that runs out of a user home"
 
-# Stopping the unit is exactly what runs ExecStop, which is the path being taken
-# away from root. Disabling only drops the multi-user.target symlink.
-! grep -q '^systemctl stop' "$CALLS" ||
-  fail "migration never stops the unit, which would run ExecStop as root" "$(cat "$CALLS")"
-pass "migration never stops the unit, which would run ExecStop as root"
-
-disable_at=$(grep -n '^systemctl disable omarchy-plymouth-shutdown\.service$' "$CALLS" | cut -d: -f1)
 remove_at=$(grep -n '^sudo rm -f .*omarchy-plymouth-shutdown\.service$' "$CALLS" | cut -d: -f1)
-reload_at=$(grep -n '^systemctl daemon-reload$' "$CALLS" | cut -d: -f1)
-[[ -n $disable_at && -n $remove_at && -n $reload_at ]] ||
-  fail "migration disables, removes, then reloads the unit" "$(cat "$CALLS")"
-(( disable_at < remove_at && remove_at < reload_at )) ||
-  fail "migration disables before removing and reloads last" "$(cat "$CALLS")"
-pass "migration disables the unit, removes it, then reloads systemd in that order"
+[[ -n $remove_at ]] || fail "migration removes the vulnerable legacy unit" "$(cat "$CALLS")"
+! grep -qE '^systemctl |^dinitctl ' "$CALLS" ||
+  fail "migration does not invoke a service manager for an inert legacy unit" "$(cat "$CALLS")"
+pass "migration removes the inert legacy unit without service-manager actions"
 
 # Homes are not all under /home, and the account running this machine-wide
 # repair may not be the account that installed the unit.
@@ -583,31 +562,6 @@ run_migration
 [[ ! -e $plymouth_unit ]] ||
   fail "migration removes a unit whose last line ends mid-continuation"
 pass "migration removes a unit whose last line ends mid-continuation"
-
-# If removing the unit succeeds but daemon-reload fails, the loaded unit still
-# needs to be forgotten. Persist that half of the repair so the retry reloads
-# systemd even though the unit file is already gone.
-reset_machine
-write_plymouth_unit "/home/installer/.local/share/omarchy/bin/omarchy-plymouth-shutdown-sync"
-reload_failure_seen="$test_dir/reload-failure-seen"
-rm -f "$reload_failure_seen"
-
-set +e
-FAIL_DAEMON_RELOAD_ONCE_MARKER="$reload_failure_seen" run_migration
-reload_status=$?
-set -e
-
-(( reload_status != 0 )) ||
-  fail "migration fails after a failed daemon-reload" "status=$reload_status"
-[[ ! -e $plymouth_unit && -e $reload_needed_marker && ! -e $machine_marker ]] ||
-  fail "migration records the pending reload without marking the repair complete"
-
-run_migration
-[[ ! -e $reload_needed_marker && -e $machine_marker ]] ||
-  fail "migration completes a pending daemon-reload on retry"
-grep -q '^systemctl daemon-reload$' "$CALLS" ||
-  fail "migration retries daemon-reload after the unit file is gone" "$(cat "$CALLS")"
-pass "migration retries daemon-reload after the unit file is gone"
 
 # sudo cannot prompt without a terminal, and omarchy-migrate runs from places that
 # have none. bin/omarchy-migrate writes the completion marker on a zero exit, so

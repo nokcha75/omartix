@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Omarchy (Hyprland uwsm)
-Comment=Omarchy Hyprland session managed by uwsm
-Exec=uwsm start -g -1 -e -D Hyprland hyprland.desktop
-TryExec=uwsm
+Name=Omartix (Hyprland)
+Comment=Omartix Hyprland session managed by elogind
+Exec=start-hyprland
+TryExec=start-hyprland
 Type=Application

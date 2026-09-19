@@ -1,0 +1,6 @@
+# tty1 belongs exclusively to the Omarchy installer on live media.
+#
+# Keep the service name dinit normally starts from its inittab configuration,
+# but make it inert so agetty cannot race the installer for the same terminal.
+type = internal
+depends-on = login.target

@@ -6,6 +6,9 @@
 
 set -euo pipefail
 
+REMINDER_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/reminders"
+SERVICE_DIR="$HOME/.config/dinit.d"
+
 format_remaining() {
   local seconds=$1
   local minutes=$((seconds / 60))
@@ -21,17 +24,15 @@ format_remaining() {
 }
 
 active_reminder_timers() {
-  local now=${1:-$(date +%s)}
-  local timer next
+  local now=${1:-$(date +%s)} meta unit next
 
-  while IFS=$'\t' read -r timer next; do
-    [[ -z $timer || -z $next ]] && continue
-
-    next=$((next / 1000000))
-    ((next <= now)) && continue
-
-    printf "%s\t%s\n" "$timer" "$next"
-  done < <(systemctl --user list-timers --all --output=json "omarchy-reminder-*.timer" 2>/dev/null | jq -r '.[] | [.unit, .next] | @tsv')
+  for meta in "$REMINDER_DIR"/*.meta; do
+    [[ -f $meta ]] || continue
+    unit=$(basename "$meta" .meta)
+    next=$(<"$meta")
+    [[ $next =~ ^[0-9]+$ && $next -gt $now ]] || continue
+    printf "%s\t%s\n" "$unit" "$next"
+  done
 }
 
 refresh_indicator() {
@@ -44,17 +45,16 @@ open_interactive() {
 
 show_reminders() {
   local timer next remaining reminder reminder_minutes body=""
-  local reminder_dir="${XDG_RUNTIME_DIR:-/tmp}/omarchy-reminders"
   local reminder_message=""
-  local now=$(date +%s)
+  local now
+  now=$(date +%s)
 
   while IFS=$'\t' read -r timer next; do
     remaining=$((next - now))
-    reminder=${timer%.timer}
-    reminder=${reminder#omarchy-reminder-}
+    reminder=${timer#omarchy-reminder-}
     reminder_minutes=${reminder%%m-*}
     reminder_message=""
-    [[ -f $reminder_dir/${timer%.timer}.message ]] && reminder_message=$(<"$reminder_dir/${timer%.timer}.message")
+    [[ -f $REMINDER_DIR/$timer.message ]] && reminder_message=$(<"$REMINDER_DIR/$timer.message")
 
     if [[ -n $reminder_message ]]; then
       body+="$reminder_message in $(format_remaining $remaining) ($(date -d "@$next" +%-H:%M))"$'\n'
@@ -72,21 +72,21 @@ show_reminders() {
 
 show_json() {
   local timer next remaining reminder reminder_minutes unit reminder_message label item_json reminders_json="[]"
-  local reminder_dir="${XDG_RUNTIME_DIR:-/tmp}/omarchy-reminders"
-  local now=$(date +%s)
+  local now
+  now=$(date +%s)
   local count=0
   local tooltip="Set Reminder"
 
   while IFS=$'\t' read -r timer next; do
     count=$((count + 1))
 
-    unit=${timer%.timer}
+    unit=$timer
     reminder=${unit#omarchy-reminder-}
     reminder_minutes=${reminder%%m-*}
     [[ ! $reminder_minutes =~ ^[0-9]+$ ]] && reminder_minutes=0
     remaining=$((next - now))
     reminder_message=""
-    [[ -f $reminder_dir/$unit.message ]] && reminder_message=$(<"$reminder_dir/$unit.message")
+    [[ -f $REMINDER_DIR/$unit.message ]] && reminder_message=$(<"$REMINDER_DIR/$unit.message")
 
     if [[ -n $reminder_message ]]; then
       label=$reminder_message
@@ -118,16 +118,14 @@ show_json() {
 }
 
 clear_reminders() {
-  local units
-  local reminder_dir="${XDG_RUNTIME_DIR:-/tmp}/omarchy-reminders"
+  local meta unit
 
-  units=$(systemctl --user list-timers --all --no-legend --no-pager "omarchy-reminder-*.timer" 2>/dev/null | awk '{ print $(NF - 1), $NF }')
-
-  if [[ -n $units ]]; then
-    xargs -r systemctl --user stop <<<"$units" || true
-  fi
-
-  rm -f "$reminder_dir"/omarchy-reminder-*.message 2>/dev/null || true
+  for meta in "$REMINDER_DIR"/*.meta; do
+    [[ -f $meta ]] || continue
+    unit=$(basename "$meta" .meta)
+    dinitctl --user stop "$unit" 2>/dev/null || true
+    rm -f "$SERVICE_DIR/$unit" "$REMINDER_DIR/$unit.meta" "$REMINDER_DIR/$unit.message"
+  done
   refresh_indicator
   omarchy-notification-send -g 󰢌 "All reminders have been cleared"
 }
@@ -182,20 +180,35 @@ fi
 set_at=$(date +%s)
 remind_at=$(date -d "+${minutes} minutes" +%H:%M)
 unit="omarchy-reminder-${minutes}m-$set_at"
-reminder_dir="${XDG_RUNTIME_DIR:-/tmp}/omarchy-reminders"
-message_file="$reminder_dir/$unit.message"
+message_file="$REMINDER_DIR/$unit.message"
 confirmation="You'll be reminded at $remind_at"
 confirmation_title="Reminder set for ${minutes} minutes"
 
-mkdir -p "$reminder_dir"
+if omarchy-cmd-missing dinitctl; then
+  echo "omarchy-reminder requires the dinit edition." >&2
+  exit 1
+fi
+
+mkdir -p "$REMINDER_DIR" "$SERVICE_DIR"
 
 if [[ -n $custom_message ]]; then
   printf "%s" "$custom_message" >"$message_file"
   confirmation_title="$custom_message in ${minutes} minutes"
 fi
 
-systemd-run --user --quiet --collect --on-active="${minutes}m" --unit="$unit" \
-  bash -c 'omarchy-notification-send -g 󰢌 "Reminder" "$1"; rm -f "$2"; omarchy-shell -q omarchy.indicators refresh >/dev/null 2>&1 || true' bash "$message" "$message_file"
+printf '%s\n' "$((set_at + minutes * 60))" >"$REMINDER_DIR/$unit.meta"
+printf '%s' "$message" >"$message_file"
+printf '%s\n' \
+  "type = process" \
+  "command = /usr/bin/omarchy-reminder-worker $unit" \
+  "restart = false" \
+  >"$SERVICE_DIR/$unit"
+
+if ! dinitctl --user start "$unit"; then
+  rm -f "$SERVICE_DIR/$unit" "$REMINDER_DIR/$unit.meta" "$message_file"
+  echo "Failed to start the dinit reminder service." >&2
+  exit 1
+fi
 
 refresh_indicator
 omarchy-notification-send -g 󰢌 "$confirmation_title" "$confirmation"

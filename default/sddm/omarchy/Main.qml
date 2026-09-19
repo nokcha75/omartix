@@ -12,7 +12,7 @@ Rectangle {
   property int sessionIndex: {
     for (var i = 0; i < sessionModel.rowCount(); i++) {
       var name = (sessionModel.data(sessionModel.index(i, 0), Qt.DisplayRole) || "").toString()
-      if (name.indexOf("uwsm") !== -1)
+      if (name.indexOf("Omartix") !== -1)
         return i
     }
     return sessionModel.lastIndex

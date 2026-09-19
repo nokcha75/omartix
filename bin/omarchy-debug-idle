@@ -31,12 +31,13 @@ section "Persisted shell log"
 journalctl -t omarchy-shell -n "$lines" --no-pager --quiet 2>/dev/null || true
 
 section "Relevant processes"
+# shellcheck disable=SC2009 # Show the matching command lines in diagnostics.
 ps -eo pid=,args= \
-  | grep -E 'quickshell -n -p|omarchy-system-sleep-monitor|systemd-inhibit.*Lock screen before suspend|org\.omarchy\.screensaver|omarchy-screensaver|(^|/| )ttfx( |$)' \
+  | grep -E 'quickshell -n -p|omarchy-system-sleep-monitor|elogind-inhibit.*Lock screen before suspend|org\.omarchy\.screensaver|omarchy-screensaver|(^|/| )ttfx( |$)' \
   | grep -v grep || true
 
 section "Sleep lock service"
-systemctl --user status omarchy-sleep-lock.service --no-pager 2>/dev/null || true
+dinitctl --user status omarchy-sleep-lock 2>/dev/null || true
 
 section "Hyprland screensaver clients"
 hyprctl clients -j 2>/dev/null \

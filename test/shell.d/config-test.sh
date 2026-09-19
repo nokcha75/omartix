@@ -103,38 +103,14 @@ import sys
 from pathlib import Path
 
 root = Path(os.environ["ROOT"])
-home = Path.home()
-pkgs_candidates = [
-  root.parent / "omarchy-pkgs/pkgbuilds",
-  root.parent / "omarchy/omarchy-pkgs/pkgbuilds",
-  root.parent.parent / "omarchy-pkgs/pkgbuilds",
-  root.parent / "omacom/omarchy-pkgs/pkgbuilds",
-  root.parent.parent / "omacom/omarchy-pkgs/pkgbuilds",
-  home / "Work/omacom/omarchy-pkgs/pkgbuilds",
-]
-# Checkouts differ per machine, so allow an explicit pointer at the sibling repo.
-# Accepts either the omarchy-pkgs checkout or its pkgbuilds/ directory.
-override = os.environ.get("OMARCHY_PKGS_PATH")
-if override:
-  pkgs_candidates = [Path(override) / "pkgbuilds", Path(override)] + pkgs_candidates
-pkgs_root = next((path for path in pkgs_candidates if path.exists()), None)
-if pkgs_root is None:
-  print("not ok - omarchy-pkgs checkout found for PKGBUILD coverage", file=sys.stderr)
-  print(
-    "looked in:\n  " + "\n  ".join(str(path) for path in pkgs_candidates) +
-    "\nset OMARCHY_PKGS_PATH to the omarchy-pkgs checkout",
-    file=sys.stderr,
-  )
+pkgbuild_path = root / "packaging/omartix/PKGBUILD"
+if not pkgbuild_path.exists():
+  print("not ok - Omartix core package recipe exists in this repository", file=sys.stderr)
   sys.exit(1)
-settings_pkgbuild_path = pkgs_root / "omarchy-settings/PKGBUILD"
-omarchy_pkgbuild_path = pkgs_root / "omarchy/PKGBUILD"
-if not settings_pkgbuild_path.exists():
-  settings_pkgbuild_path = pkgs_root / "omarchy-settings-dev/PKGBUILD"
-if not omarchy_pkgbuild_path.exists():
-  omarchy_pkgbuild_path = pkgs_root / "omarchy-dev/PKGBUILD"
-pkgbuild = settings_pkgbuild_path.read_text()
-omarchy_pkgbuild = omarchy_pkgbuild_path.read_text()
+pkgbuild = pkgbuild_path.read_text()
 errors = []
+default_payload = "cp -a --no-preserve=ownership applications config default install migrations shell themes"
+etc_payload = 'cp -a --no-preserve=ownership etc/. "$pkgdir/etc/"'
 package_defaults = [
   ("default/uwsm/env.d/10-omarchy", "/usr/share/uwsm/env.d/10-omarchy", "uwsm/env"),
   ("default/uwsm/default", None, "uwsm/default"),
@@ -143,15 +119,6 @@ package_defaults = [
   ("default/xdg-terminal-exec/hyprland-xdg-terminals.list", "/usr/share/xdg-terminal-exec/hyprland-xdg-terminals.list", "xdg-terminals.list"),
   ("default/applications/mimeapps.list", "/usr/share/applications/mimeapps.list", "mimeapps.list"),
   ("etc/fastfetch/config.jsonc", "/etc/fastfetch/config.jsonc", "fastfetch/config.jsonc"),
-  ("default/systemd/user/bt-agent.service", "/usr/lib/systemd/user/bt-agent.service", "systemd/user/bt-agent.service"),
-  ("default/systemd/user/omarchy-sleep-lock.service", "/usr/lib/systemd/user/omarchy-sleep-lock.service", "systemd/user/omarchy-sleep-lock.service"),
-  ("default/systemd/user/omarchy-recover-internal-monitor.service", "/usr/lib/systemd/user/omarchy-recover-internal-monitor.service", "systemd/user/omarchy-recover-internal-monitor.service"),
-  ("default/systemd/user/omarchy-migrate-notify.service", "/usr/lib/systemd/user/omarchy-migrate-notify.service", "systemd/user/omarchy-migrate-notify.service"),
-  ("default/systemd/user/omarchy-tailscale-receive.service", "/usr/lib/systemd/user/omarchy-tailscale-receive.service", "systemd/user/omarchy-tailscale-receive.service"),
-  ("default/systemd/user/omarchy-fcitx5.service", "/usr/lib/systemd/user/omarchy-fcitx5.service", "systemd/user/omarchy-fcitx5.service"),
-  ("default/systemd/user/omarchy-crash-watch.service", "/usr/lib/systemd/user/omarchy-crash-watch.service", "systemd/user/omarchy-crash-watch.service"),
-  ("default/systemd/zram-generator.conf.d/90-omarchy.conf", "/usr/lib/systemd/zram-generator.conf.d/90-omarchy.conf", "systemd/zram-generator.conf.d/90-omarchy.conf"),
-  ("default/systemd/system/plocate-updatedb.service.d/10-omarchy.conf", "/usr/lib/systemd/system/plocate-updatedb.service.d/10-omarchy.conf", "systemd/system/plocate-updatedb.service.d/10-omarchy.conf"),
   ("default/fonts/omarchy/omarchy.ttf", "/usr/share/fonts/omarchy/omarchy.ttf", "omarchy.ttf"),
   ("default/snapper/root", "/etc/snapper/config-templates/omarchy", "snapper/root"),
 ]
@@ -161,18 +128,9 @@ for source, destination, legacy in package_defaults:
     errors.append(f"missing package default source: {source}")
   if (root / "config" / legacy).exists():
     errors.append(f"legacy path still in config/: {legacy}")
-  if destination and (source not in pkgbuild or destination not in pkgbuild):
-    errors.append(f"PKGBUILD does not explicitly install {source} -> {destination}")
-
-# Existing users have an absolute wants symlink to the old unit path, and the
-# migration that repoints it only runs for users who run an update -- the
-# opposite of who the notifier is for. Dropping this alias strands them.
-notify_alias = 'ln -sfn omarchy-migrate-notify.service "$pkgdir/usr/lib/systemd/user/omarchy-update-user-notify.service"'
-if notify_alias not in pkgbuild:
-  errors.append(
-    "PKGBUILD does not ship the omarchy-update-user-notify.service compatibility "
-    "alias, so users who have not run migration 1785095882 lose the login notifier"
-  )
+  required_payload = etc_payload if source.startswith("etc/") else default_payload
+  if required_payload not in pkgbuild:
+    errors.append(f"Omartix PKGBUILD does not include the payload containing {source}")
 
 alpm_hooks = [
   "00-omarchy-update-guard.hook",
@@ -181,11 +139,13 @@ alpm_hooks = [
 ]
 for hook in alpm_hooks:
   source = f"default/libalpm/hooks/{hook}"
-  destination = f"/usr/share/libalpm/hooks/{hook}"
   if not (root / source).exists():
     errors.append(f"missing package default source: {source}")
-  if source not in omarchy_pkgbuild or destination not in omarchy_pkgbuild:
-    errors.append(f"omarchy PKGBUILD does not install {source} -> {destination}")
+  if default_payload not in pkgbuild:
+    errors.append(f"Omartix PKGBUILD does not include the payload containing {source}")
+
+if 'rm -rf "$pkgdir/usr/share/omarchy/default/systemd" "$pkgdir/etc/systemd"' not in pkgbuild:
+  errors.append("Omartix PKGBUILD does not reject systemd payload")
 
 if errors:
   print("\n".join(errors), file=sys.stderr)
@@ -424,7 +384,7 @@ jq -e '
 [[ -f $TMPDIR/home/.local/state/omarchy/restart-shell-called ]] || fail "shell refresh restarts shell"
 pass "shell refresh places optional service widgets when services are available"
 
-if grep -RIl 'upgrade-to-quattro\|Omarchy 4\.0 is upgraded' "$ROOT/migrations" >/dev/null; then
-  fail "4.0 upgrade is not modeled as a migration"
+if grep -RIl 'upgrade-to-quattro\|OMARCHY_UPGRADE_TO_QUATTRO' "$ROOT/migrations" >/dev/null; then
+  fail "legacy Arch transition is not modeled as an Omartix migration"
 fi
-pass "4.0 upgrade is handled outside the migration runner"
+pass "Omartix migrations contain no legacy Arch transition"

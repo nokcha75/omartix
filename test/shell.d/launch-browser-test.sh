@@ -31,9 +31,11 @@ cat >"$mock_bin/chromium" <<'SH'
 #!/bin/bash
 exit 0
 SH
-cat >"$mock_bin/systemd-run" <<'SH'
+cat >"$mock_bin/omartix-app" <<'SH'
 #!/bin/bash
-printf '%s\n' "$*" >"$OMARCHY_TEST_BROWSER_LAUNCH"
+printf '%s\n' "$*" >>"$OMARCHY_TEST_BROWSER_LAUNCH"
+[[ $1 == -- ]] && shift
+exec "$@"
 SH
 cat >"$mock_bin/omarchy-hyprland-focus-app" <<'SH'
 #!/bin/bash
@@ -44,6 +46,19 @@ chmod +x "$mock_bin"/*
 launch_log="$test_tmp/launch"
 focus_log="$test_tmp/focus"
 xdg_settings_browser="$test_tmp/xdg-settings-browser"
+
+wait_for_launch() {
+  local expected="$1"
+  local attempt
+
+  for attempt in {1..50}; do
+    [[ -f $launch_log ]] && grep -F "$expected" "$launch_log" >/dev/null && return 0
+    sleep 0.02
+  done
+
+  return 1
+}
+
 HOME="$test_home" PATH="$mock_bin:$PATH" HYPRLAND_INSTANCE_SIGNATURE=test \
   OMARCHY_TEST_BROWSER_LAUNCH="$launch_log" OMARCHY_TEST_BROWSER_FOCUS="$focus_log" \
   bash "$ROOT/bin/omarchy-launch-browser"
@@ -60,7 +75,7 @@ HOME="$test_home" PATH="$mock_bin:$PATH" HYPRLAND_INSTANCE_SIGNATURE=test \
   OMARCHY_TEST_BROWSER_LAUNCH="$launch_log" OMARCHY_TEST_BROWSER_FOCUS="$focus_log" \
   bash "$ROOT/bin/omarchy-launch-browser" "https://example.test/authorize"
 
-grep -F 'https://example.test/authorize' "$launch_log" >/dev/null || fail "browser launcher passes through the URL"
+wait_for_launch 'https://example.test/authorize' || fail "browser launcher passes through the URL"
 grep -Fx '^chromium.*$' "$focus_log" >/dev/null || fail "browser launcher focuses the default browser window"
 
 rm -f "$focus_log" "$xdg_settings_browser"
@@ -71,7 +86,7 @@ HOME="$test_home" PATH="$mock_bin:$PATH" HYPRLAND_INSTANCE_SIGNATURE=test \
   OMARCHY_TEST_XDG_SETTINGS_BROWSER="$xdg_settings_browser" \
   bash "$ROOT/bin/omarchy-launch-browser" "https://example.test/fallback"
 
-grep -F 'https://example.test/fallback' "$launch_log" >/dev/null ||
+wait_for_launch 'https://example.test/fallback' ||
   fail "browser launcher falls back to the HTTPS handler when xdg-settings is empty"
 [[ ! -e $xdg_settings_browser ]] ||
   fail "browser launcher unsets BROWSER before reading xdg-settings"
@@ -79,3 +94,9 @@ grep -Fx '^chromium.*$' "$focus_log" >/dev/null ||
   fail "browser launcher focuses the browser resolved from the HTTPS handler"
 
 pass "browser launcher follows opened links to the browser workspace"
+
+! rg -q '\b(systemd-run|uwsm-app)\b' "$ROOT/bin/omarchy-launch-browser" ||
+  fail "browser launcher has no systemd or UWSM runtime dependency"
+grep -F 'nohup omartix-app --' "$ROOT/bin/omarchy-launch-browser" >/dev/null ||
+  fail "browser launcher detaches through the Omartix app launcher"
+pass "browser launcher uses the dinit-compatible app launcher"

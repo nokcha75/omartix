@@ -303,7 +303,6 @@ policy_files=(
   "$ROOT/bin/omarchy-provision-owner"
   "$ROOT/bin/omarchy-theme-set-browser"
   "$ROOT/bin/omarchy-theme-set-browser-policy"
-  "$ROOT/bin/omarchy-upgrade-to-quattro"
   "$ROOT/install/config/theme-system.sh"
   "$ROOT/install/config/browser-policy.sh"
   "$ROOT/install/helpers/browser-policy.sh"

@@ -1,0 +1,4 @@
+type = process
+command = /usr/bin/omarchy-tailscale-receive
+restart = true
+restart-delay = 5

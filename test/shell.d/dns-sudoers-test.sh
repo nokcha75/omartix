@@ -33,7 +33,7 @@ pass "dns sudoers rule is scoped to the stock providers"
 # The privileged half runs as root under sudo's secure_path, and a dev link
 # (etc/sudoers.d/omarchy-dev-path) prepends a user-writable checkout bin/ to it.
 # Every helper the script calls by bare name -- dirname, install, tee, nmcli,
-# systemctl, awk -- is a system tool, so once it holds root the script pins PATH
+# awk -- is a system tool, so once it holds root the script pins PATH
 # to trusted system directories and never resolves one of them out of the
 # checkout. The unprivileged wrapper phase keeps the caller's PATH, which is why
 # the pin is gated on EUID rather than set unconditionally.

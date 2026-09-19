@@ -9,4 +9,4 @@ if omarchy-cmd-present tailscale && tailscale status --json >/dev/null 2>&1; the
   exit 0
 fi
 
-systemctl is-active --quiet tailscaled.service >/dev/null 2>&1 || pgrep -x tailscaled >/dev/null 2>&1
+dinitctl is-started tailscaled >/dev/null 2>&1 || pgrep -x tailscaled >/dev/null 2>&1

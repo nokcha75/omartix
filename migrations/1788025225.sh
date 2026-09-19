@@ -1,9 +1,12 @@
+#!/bin/bash
+
+set -euo pipefail
+
 echo "Remove privileged files left behind by retired Omarchy installers"
 
 sudoers_dir="${OMARCHY_SUDOERS_DIR:-/etc/sudoers.d}"
 systemd_dir="${OMARCHY_SYSTEMD_SYSTEM_DIR:-/etc/systemd/system}"
 machine_marker="${OMARCHY_RETIRED_INSTALLER_ARTIFACTS_MARKER:-/var/lib/omarchy/migrations/1788025225}"
-reload_needed_marker="$machine_marker.daemon-reload"
 
 [[ ! -e $machine_marker ]] || exit 0
 
@@ -272,24 +275,13 @@ if ! as_root true 2>/dev/null; then
   fail_privileged_repair
 fi
 
-# Removing a unit and reloading systemd are one repair. Persist the second half
-# before removing the file so a failed daemon-reload cannot be forgotten on a
-# retry that now sees no unit on disk.
-if [[ -e $reload_needed_marker ]]; then
-  if ! as_root systemctl daemon-reload >/dev/null 2>&1; then
-    fail_privileged_repair
-  fi
-  if ! as_root rm -f "$reload_needed_marker"; then
-    fail_privileged_repair
-  fi
-fi
-
 inspect_sudoers_file() {
   local file="$1" predicate="$2" kind content
 
   # Emit an explicit state from the elevated process. A bare `sudo test -f` in
   # an if-condition makes "file missing" indistinguishable from "sudo failed",
   # which could mark a live grant repaired without ever reading it.
+  # shellcheck disable=SC2016 # $1 is evaluated by the elevated bash process.
   if ! kind=$(as_root bash -c 'if [[ -f $1 ]]; then printf file; elif [[ -e $1 ]]; then printf other; else printf missing; fi' bash "$file"); then
     fail_privileged_repair
   fi
@@ -309,27 +301,12 @@ inspect_sudoers_file() {
 inspect_sudoers_file "$first_run_sudoers" first_run_sudoers_is_generated
 inspect_sudoers_file "$tsui_sudoers" tsui_sudoers_is_generated
 
-# /etc/systemd/system is 0755, so this one needs no elevation to look at.
+# A legacy systemd unit is inert under dinit. Read it only to prove that it is
+# the vulnerable installer-generated file, then remove it without starting or
+# invoking any systemd service-manager operation.
 plymouth_unit="$systemd_dir/omarchy-plymouth-shutdown.service"
 if [[ -f $plymouth_unit ]] && plymouth_unit_runs_from_home <"$plymouth_unit"; then
-  # Disable, never stop. Stopping the unit is precisely what runs ExecStop, and
-  # ExecStop is the path this migration exists to keep root away from; disabling
-  # only drops the multi-user.target symlink.
-  if ! as_root install -Dm644 /dev/null "$reload_needed_marker"; then
-    fail_privileged_repair
-  fi
-  if ! as_root systemctl disable omarchy-plymouth-shutdown.service >/dev/null 2>&1; then
-    fail_privileged_repair
-  fi
   if ! as_root rm -f "$plymouth_unit"; then
-    fail_privileged_repair
-  fi
-  # systemd keeps serving the copy it already loaded until it rereads the
-  # directory, so without this the unit is still there to run at shutdown.
-  if ! as_root systemctl daemon-reload >/dev/null 2>&1; then
-    fail_privileged_repair
-  fi
-  if ! as_root rm -f "$reload_needed_marker"; then
     fail_privileged_repair
   fi
 fi

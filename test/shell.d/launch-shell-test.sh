@@ -42,16 +42,6 @@ fi
 exit "${status:-0}"
 SH
 
-cat >"$fake_bin/systemd-cat" <<'SH'
-#!/bin/bash
-
-while (( $# > 0 )); do
-  [[ $1 == "--" ]] && { shift; break; }
-  shift
-done
-exec "$@"
-SH
-
 cat >"$fake_bin/hyprctl" <<'SH'
 #!/bin/bash
 
@@ -76,7 +66,7 @@ shift 2
 printf '%s\n' "$*" >>"$OMARCHY_TEST_LOGGER_LOG"
 SH
 
-chmod +x "$fake_bin/quickshell" "$fake_bin/systemd-cat" "$fake_bin/hyprctl" "$fake_bin/logger"
+chmod +x "$fake_bin/quickshell" "$fake_bin/hyprctl" "$fake_bin/logger"
 
 qs_log="$test_tmp/quickshell.log"
 qs_env_log="$test_tmp/quickshell-env.log"
@@ -90,6 +80,7 @@ launch_shell() {
   : >"$logger_log"
 
   PATH="$fake_bin:$PATH" \
+  XDG_STATE_HOME="$test_tmp/state" \
   OMARCHY_PATH="$shell_root" \
   OMARCHY_TEST_QS_LOG="$qs_log" \
   OMARCHY_TEST_QS_ENV_LOG="$qs_env_log" \
@@ -145,6 +136,7 @@ pass "a compositor too busy to answer is not mistaken for one that is gone"
 : >"$logger_log"
 
 PATH="$fake_bin:$PATH" \
+XDG_STATE_HOME="$test_tmp/state" \
 OMARCHY_PATH="$shell_root" \
 OMARCHY_TEST_QS_LOG="$qs_log" \
 OMARCHY_TEST_QS_ENV_LOG="$qs_env_log" \
@@ -174,6 +166,7 @@ pass "a signal during backoff stops the supervisor before it relaunches"
 rm -f "$qs_terminated"
 
 PATH="$fake_bin:$PATH" \
+XDG_STATE_HOME="$test_tmp/state" \
 OMARCHY_PATH="$shell_root" \
 OMARCHY_TEST_QS_LOG="$qs_log" \
 OMARCHY_TEST_QS_ENV_LOG="$qs_env_log" \
@@ -202,3 +195,10 @@ launch_pid=""
 [[ -f $qs_terminated ]] || fail "the running shell is signalled when the supervisor is"
 [[ $(launches) == 1 ]] || fail "the signalled shell is not relaunched" "$(<"$qs_log")"
 pass "stopping the supervisor stops the shell it is watching"
+
+if rg -q '\bsystemd-cat\b' "$ROOT/bin/omarchy-launch-shell"; then
+  fail "the shell launcher does not depend on systemd-cat"
+fi
+grep -F 'quickshell -n -p "$OMARCHY_PATH/shell" >>"$shell_log" 2>&1 &' "$ROOT/bin/omarchy-launch-shell" >/dev/null ||
+  fail "the shell launcher records Quickshell in the persistent state log"
+pass "the shell launcher uses a dinit-neutral persistent log"

@@ -1,0 +1,27 @@
+# Packages required by install/omarchy-base.packages that Artix's public
+# repositories do not provide. The standard Omartix ISO downloads their
+# published artifacts from pkgs.omarchy.org into its offline mirror; it does
+# not rebuild their PKGBUILDs. Local source builds remain an explicit developer
+# workflow only.
+aether
+asdcontrol
+cliamp
+herdr
+hyprland-preview-share-picker
+localsend
+mise-bin
+omacalc
+omacut
+omarchy-chromium-bin
+omarchy-nvim
+omawrite
+tensaku
+tobi-try
+ttf-ia-writer
+ttf-jetbrains-mono-nerd-basic
+ttfx
+tzupdate
+ufw-docker
+xdg-terminal-exec
+yaru-icon-theme
+yay

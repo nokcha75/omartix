@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# omarchy:summary=Explain why the legacy Quattro upgrader is unavailable on Omartix
+# omarchy:args=[]
+# omarchy:examples=omarchy upgrade to quattro
+
+set -euo pipefail
+
+cat >&2 <<'MESSAGE'
+omarchy upgrade to quattro is not available on Omartix.
+
+Quattro converted legacy Arch Linux, systemd-backed Omarchy installations to
+Omarchy's package-backed layout. Omartix is installed package-backed from the
+start and uses Artix with dinit and elogind; running that legacy conversion
+would overwrite its repository and service configuration.
+
+Use `omarchy-update` for normal updates.
+MESSAGE
+
+exit 1

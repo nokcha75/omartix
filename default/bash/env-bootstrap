@@ -1,7 +1,7 @@
 # Single source of truth for OMARCHY_PATH + PATH adjustments. Sourced by:
 #   /etc/profile.d/omarchy.sh                 (system login shells)
 #   /etc/skel/.bashrc                         (interactive shells)
-#   /usr/share/uwsm/env.d/10-omarchy          (Hyprland session via uwsm)
+#   the graphical-session launcher             (Hyprland session)
 #   /usr/share/omarchy/default/bash/envs      (bash rc chain; SSH/non-login)
 
 # /etc/omarchy.conf is written by omarchy-dev-link and reset by
@@ -26,7 +26,7 @@ if [ "$OMARCHY_PATH" != /usr/share/omarchy ]; then
 fi
 
 # User-level tool paths, appended so system binaries keep precedence. This is
-# what lets login shells (ssh, bash -lc) and the uwsm session find mise-managed
+# what lets login shells (ssh, bash -lc) and the graphical session find mise-managed
 # tools without an interactive rc. Keep these directories in sync with the PAM
 # PATH line from install/config/ssh-command-path.sh, which covers SSH commands
 # that run no shell setup at all.

@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# omarchy:hidden=true
+# omarchy:summary=Initialize Omartix graphical-session services
+
+set -euo pipefail
+
+if ! dinitctl --user list >/dev/null 2>&1; then
+  echo "omarchy-session-init: dinit user manager is unavailable" >&2
+  exit 1
+fi
+
+while IFS= read -r assignment; do
+  [[ $assignment == *=* ]] || continue
+  dinitctl --user setenv "$assignment"
+done < <(env)
+dbus-update-activation-environment --all
+
+start_service() {
+  local service="$1"
+  [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/dinit.d/$service" ]] || return 0
+  dinitctl --user start "$service" >/dev/null 2>&1 || true
+}
+
+if [[ -n ${WAYLAND_DISPLAY:-} ]]; then
+  start_service omarchy-fcitx5
+  start_service omarchy-sleep-lock
+  start_service omarchy-migrate-notify
+  [[ ! -e "$HOME/.local/state/omarchy/toggles/crash-capture-off" ]] && start_service omarchy-crash-watch
+fi
+
+[[ -e "$HOME/.local/state/omarchy/toggles/hypr/internal-monitor-disable.lua" ]] &&
+  start_service omarchy-recover-internal-monitor
+bluetooth_path=${OMARCHY_BLUETOOTH_PATH:-/sys/class/bluetooth}
+[[ -d $bluetooth_path ]] && pgrep -x bluetoothd >/dev/null 2>&1 &&
+  start_service bt-agent

@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# omarchy:summary=Manage the Ollama server with Omartix dinit
+# omarchy:args=[install|start|stop|status|remove]
+
+set -euo pipefail
+
+service_name=ollama
+config_home=${XDG_CONFIG_HOME:-$HOME/.config}
+service_dir="$config_home/dinit.d"
+boot_dir="$service_dir/boot.d"
+service_file="$service_dir/$service_name"
+boot_link="$boot_dir/$service_name"
+
+require_user_manager() {
+  if ! dinitctl --user list >/dev/null 2>&1; then
+    echo "Ollama requires the Omartix dinit user manager." >&2
+    exit 1
+  fi
+}
+
+install_service() {
+  require_user_manager
+  install -d -m 0755 "$service_dir" "$boot_dir"
+  cat >"$service_file" <<'DINIT'
+type = process
+command = /usr/bin/ollama serve
+restart = true
+restart-delay = 3
+DINIT
+  ln -sfn "../$service_name" "$boot_link"
+}
+
+case "${1:-status}" in
+install)
+  install_service
+  ;;
+start)
+  install_service
+  dinitctl --user start "$service_name"
+  ;;
+stop)
+  require_user_manager
+  dinitctl --user stop "$service_name"
+  ;;
+status)
+  require_user_manager
+  dinitctl --user status "$service_name"
+  ;;
+remove)
+  require_user_manager
+  dinitctl --user stop "$service_name" >/dev/null 2>&1 || true
+  rm -f "$boot_link" "$service_file"
+  ;;
+*)
+  echo "Usage: omarchy-ollama-service [install|start|stop|status|remove]" >&2
+  exit 1
+  ;;
+esac

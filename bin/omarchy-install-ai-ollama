@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# omarchy:summary=Install Ollama and start it with Omartix dinit
+
+set -euo pipefail
+
+if omarchy-cmd-present nvidia-smi; then
+  package=ollama-cuda
+elif omarchy-cmd-present rocminfo; then
+  package=ollama-rocm
+else
+  package=ollama
+fi
+
+omarchy-pkg-add "$package"
+omarchy-ollama-service start
+
+echo "Ollama is running. Models are stored in ~/.ollama."

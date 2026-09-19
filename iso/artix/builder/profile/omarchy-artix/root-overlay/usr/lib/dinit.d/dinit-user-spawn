@@ -1,0 +1,4 @@
+# artools creates this boot link for every dinit live profile, even when no
+# user service has been requested. Omarchy's live medium is terminal-only, so
+# retain the compatibility name without starting a second live-user manager.
+type = internal

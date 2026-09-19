@@ -1,0 +1,51 @@
+---
+
+# This is deliberately a dinit-only profile. Its overlay gives tty1 to the
+# Omarchy configurator; the Artix live environment supplies the boot plumbing.
+live-session:
+  user: omarchy
+  password: omarchy
+  # artools requires a live-session record even for a terminal-only medium.
+  # No display manager is enabled: tty1 is reserved for Omarchy's installer.
+  autologin: false
+  use-xlibre: false
+  services:
+    - NetworkManager
+  user-services: []
+
+rootfs:
+  packages:
+    # Enables a deliberately narrow Arch extra compatibility provider. dinit
+    # remains PID 1; this package supplies Arch repository/keyring support.
+    - artix-archlinux-support
+    - artools-base
+    - btrfs-progs
+    - cryptsetup
+    - dosfstools
+    - efibootmgr
+    - jq
+    - gum
+    - parted
+  packages-init:
+    dinit:
+      # artix-live-dinit owns the rootfs-side live boot services.  It must be
+      # present before the livefs overlay is mounted; putting it only in
+      # livefs leaves dinit to start the pacman/keyring services from the
+      # wrong layer during early boot.
+      - artix-live-dinit
+      - networkmanager-dinit
+    openrc: []
+    runit: []
+    s6: []
+
+livefs:
+  packages:
+    - artix-grub-live
+    - artix-live-dinit
+    - mkinitcpio-nfs-utils
+    - squashfs-tools
+  packages-init:
+    dinit: []
+    openrc: []
+    runit: []
+    s6: []

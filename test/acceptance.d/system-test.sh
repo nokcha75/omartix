@@ -25,10 +25,9 @@ verify_core_packages() {
 }
 
 verify_kernel_headers() {
-  local kernel=linux-omarchy
+  local kernel=linux
   local release
   release=$(uname -r)
-  omarchy-pkg-present linux-t2 && kernel=linux-t2
 
   [[ $(cat "/usr/lib/modules/$release/pkgbase") == "$kernel" ]] ||
     fail "the installed system boots the supported kernel" "$release is not $kernel"

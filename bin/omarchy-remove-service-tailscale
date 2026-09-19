@@ -4,11 +4,14 @@
 # omarchy:requires-sudo=true
 
 tailscale down 2>/dev/null || true
-systemctl --user disable --now omarchy-tailscale-receive.service 2>/dev/null || true
-sudo systemctl disable --now tailscaled.service 2>/dev/null || true
+dinitctl --user stop omarchy-tailscale-receive 2>/dev/null || true
+rm -f "$HOME/.config/dinit.d/boot.d/omarchy-tailscale-receive" \
+  "$HOME/.config/dinit.d/omarchy-tailscale-receive"
+sudo dinitctl stop tailscaled 2>/dev/null || true
+sudo dinitctl disable tailscaled 2>/dev/null || true
 omarchy-plugin-disable omarchy.tailscale
 omarchy-webapp-remove "Tailscale" 2>/dev/null || true
-omarchy-pkg-drop tailscale
+omarchy-pkg-drop tailscale tailscale-dinit
 
 echo ""
 echo "Tailscale has been removed."

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# omarchy:hidden=true
+# omarchy:summary=Remove the one-time first-boot autologin on Omartix
+
+set -euo pipefail
+
+rm -f /etc/sddm.conf.d/autologin.conf
+rm -f /etc/dinit.d/boot.d/omarchy-provision-autologin-once
+rm -f /etc/dinit.d/omarchy-provision-autologin-once

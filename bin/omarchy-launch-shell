@@ -1,22 +1,36 @@
 #!/bin/bash
 
-# omarchy:summary=Launch the Omarchy shell with its log kept in the journal
+# omarchy:summary=Launch the Omarchy shell with a persistent session log
 # omarchy:hidden=true
 
 # Quickshell only logs to its instance runtime dir (tmpfs), so when the shell
-# dies the idle/lock event trail is gone after a reboot. The journal keeps it
-# across sessions, bounded and timestamped, under the omarchy-shell tag.
+# dies the idle/lock event trail is gone after a reboot. Keep one rotated log in
+# the session state directory instead of relying on systemd's journal.
 #
 # Backgrounded because bash defers a trap until a foreground command returns but
-# interrupts wait. systemd-cat execs, so the job is Quickshell itself.
+# interrupts wait. Redirecting directly keeps the background PID as Quickshell.
 #
 # Quickshell's own reloading is off; Omarchy restarts the shell deliberately.
 # A package upgrade rewriting $OMARCHY_PATH/shell would otherwise reload it
 # against a half-written tree, and that failed reload leaves a second engine
 # generation behind that turns the next restart's IPC kill into a crash.
+shell_log="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/shell.log"
+shell_log_max_bytes=$((4 * 1024 * 1024))
+
+prepare_shell_log() {
+  local size
+
+  mkdir -p "${shell_log%/*}"
+  size=$(stat -c '%s' "$shell_log" 2>/dev/null || printf '0')
+  if [[ $size =~ ^[0-9]+$ ]] && (( size >= shell_log_max_bytes )); then
+    mv -f -- "$shell_log" "$shell_log.1"
+  fi
+}
+
 run_shell() {
+  prepare_shell_log
   QS_DISABLE_FILE_WATCHER=1 QS_NO_RELOAD_POPUP=1 \
-    systemd-cat -t omarchy-shell -- quickshell -n -p "$OMARCHY_PATH/shell" &
+    quickshell -n -p "$OMARCHY_PATH/shell" >>"$shell_log" 2>&1 &
   shell_pid=$!
 
   local status

@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 sleep_monitor="$ROOT/bin/omarchy-system-sleep-monitor"
@@ -14,7 +15,7 @@ producer_pid_file="$tmpdir/producer-pid"
 lock_log="$tmpdir/lock-log"
 mkdir -p "$mock_bin" "$mock_omarchy/bin"
 
-cat >"$mock_bin/systemd-inhibit" <<'SH'
+cat >"$mock_bin/elogind-inhibit" <<'SH'
 #!/bin/bash
 
 while [[ $1 == --* ]]; do
@@ -39,7 +40,7 @@ echo locked >>"$LOCK_LOG"
 SH
 
 chmod +x \
-  "$mock_bin/systemd-inhibit" \
+  "$mock_bin/elogind-inhibit" \
   "$mock_bin/dbus-monitor" \
   "$mock_omarchy/bin/omarchy-system-sleep-lock"
 ln -s "$sleep_monitor" "$mock_omarchy/bin/omarchy-system-sleep-monitor"

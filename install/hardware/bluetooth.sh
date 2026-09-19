@@ -1,4 +1,6 @@
-systemctl enable bluetooth.service
+#!/bin/bash
+
+# bluetoothd and its dinit boot.d link are owned by the Omartix finalizer.
 
 # AutoEnable stays at its stock default on purpose. It was set to false here to
 # persist the power state, which it never did: BlueZ has no such behaviour, so

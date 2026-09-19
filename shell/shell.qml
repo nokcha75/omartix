@@ -23,7 +23,7 @@ ShellRoot {
   property string home: Quickshell.env("HOME")
 
   // The omarchy-shell host is the long-running entry point. Plugins live in
-  // sibling directories under plugins/. OMARCHY_PATH is provided by the uwsm
+  // sibling directories under plugins/. OMARCHY_PATH is provided by the
   // session environment and is the single source of truth for this checkout.
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   readonly property string shellPath: omarchyPath + "/shell"

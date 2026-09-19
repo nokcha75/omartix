@@ -1,0 +1,46 @@
+name: Verify Omartix package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-package:
+    name: Source and package verification
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install verification tools
+        run: pacman -Syu --noconfirm --needed bash ripgrep
+
+      - name: Create an unprivileged package builder
+        run: |
+          useradd --create-home omartix-build
+          chown -R omartix-build:omartix-build "$GITHUB_WORKSPACE"
+
+      - name: Verify dinit source and build the temporary package
+        run: |
+          runuser -u omartix-build -- env \
+            HOME=/home/omartix-build \
+            GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
+            bash -c '
+              cd "$GITHUB_WORKSPACE"
+              for test in \
+                test/shell.d/dinit-finalizer-test.sh \
+                test/shell.d/dinit-user-service-assets-test.sh \
+                test/shell.d/dinit-dns-test.sh \
+                test/shell.d/omarchy-package-repository-test.sh \
+                test/shell.d/update-keyring-package-repository-test.sh \
+                test/shell.d/single-repo-packaging-test.sh \
+                iso/artix/test/unit/artix-handoff-boundary-test.sh \
+                iso/artix/test/unit/source-boundary-test.sh
+              do
+                bash "$test"
+              done
+            '

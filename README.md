@@ -4,6 +4,21 @@ Omarchy is a beautiful, fun & agentic Linux distribution by DHH.
 
 Read more at [omarchy.org](https://omarchy.org).
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Changes affecting services, hardware,
+installation, or migrations must follow the [dinit compatibility policy](docs/dinit-compatibility.md).
+
+## Artix+dinit ISO development
+
+The Artix ISO builder, installer media, package recipes, and KVM acceptance
+tests live in [`iso/artix/`](iso/artix/). A fresh Omartix clone is sufficient
+for ISO development; see its [build guide](iso/artix/builder/README.md).
+
+On an x86_64 Artix build host with `artools-base` and `artools-iso` installed,
+build with `OMARCHY_ARTIX_GPG_KEY=YOUR_KEY_FINGERPRINT iso/artix/build.sh`.
+The resulting ISO is written under `iso/artix/iso-output/`.
+
 ## The Omarchy Manual
 
 The manual lives in [`manual/`](manual/), which is its authoritative source. It's

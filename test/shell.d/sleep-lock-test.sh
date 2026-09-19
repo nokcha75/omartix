@@ -329,7 +329,7 @@ pass "sleep lock caps the budget a huge logind window would allow"
 
 # The cap is only reachable because the shipped drop-in widens logind's window
 # past it. Ship one without the other and the cap is dead weight.
-inhibit_delay=$(sed -n 's/^InhibitDelayMaxSec=//p' "$ROOT/etc/systemd/logind.conf.d/20-inhibit-delay.conf")
+inhibit_delay=$(sed -n 's/^InhibitDelayMaxSec=//p' "$ROOT/etc/elogind/logind.conf.d/20-inhibit-delay.conf")
 budget_cap_ms=$(sed -n 's/^budget_cap_ms=//p' "$sleep_lock")
 
 [[ -n $inhibit_delay && -n $budget_cap_ms ]] ||

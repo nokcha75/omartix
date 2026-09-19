@@ -72,8 +72,8 @@ case "$1" in
         echo true
         ;;
       --abbrev-ref)
-        [[ ${TEST_GIT_UPSTREAM:-origin/quattro} != "none" ]] || exit 1
-        echo "${TEST_GIT_UPSTREAM:-origin/quattro}"
+        [[ ${TEST_GIT_UPSTREAM:-origin/main} != "none" ]] || exit 1
+        echo "${TEST_GIT_UPSTREAM:-origin/main}"
         ;;
       *)
         exit 1
@@ -177,7 +177,7 @@ else
   status=$?
 fi
 [[ $status -eq 0 ]] || fail "update checker exits successfully when dev commits are available"
-grep -Fx 'omarchy-dev-checkout 2 new commits on origin/quattro' "$stdout" >/dev/null ||
+grep -Fx 'omarchy-dev-checkout 2 new commits on origin/main' "$stdout" >/dev/null ||
   fail "update checker reports available dev commits" "$(cat "$stdout")"
 grep -Fx -- "-C $test_tmp/checkout fetch --quiet" "$git_log" >/dev/null ||
   fail "update checker fetches the dev checkout upstream" "$(cat "$git_log")"
@@ -207,7 +207,7 @@ else
   status=$?
 fi
 [[ $status -eq 0 ]] || fail "update checker uses cached upstream state when fetch fails"
-grep -Fx 'omarchy-dev-checkout 1 new commit on origin/quattro' "$stdout" >/dev/null ||
+grep -Fx 'omarchy-dev-checkout 1 new commit on origin/main' "$stdout" >/dev/null ||
   fail "update checker reports cached dev commits after a fetch failure" "$(cat "$stdout")"
 [[ ! -s $stderr ]] || fail "update checker keeps dev fetch failures quiet" "$(cat "$stderr")"
 pass "update checker uses cached dev state when fetching is unavailable"

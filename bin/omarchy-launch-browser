@@ -7,7 +7,7 @@ default_browser=$(env -u BROWSER xdg-settings get default-web-browser)
 if [[ -z $default_browser ]]; then
   default_browser=$(xdg-mime query default x-scheme-handler/https)
 fi
-browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' {~/.local,~/.nix-profile,/usr}/share/applications/$default_browser 2>/dev/null | head -1)
+browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' {~/.local,~/.nix-profile,/usr}/share/applications/"$default_browser" 2>/dev/null | head -1)
 
 if $browser_exec --help 2>/dev/null | grep -q MOZ_LOG; then
   private_flag="--private-window"
@@ -17,9 +17,10 @@ else
   private_flag="--incognito"
 fi
 
-systemd-run --user --quiet --collect --unit="omarchy-browser-$(date +%s%N)" \
-  --property=StandardOutput=null --property=StandardError=null \
-  uwsm-app -- "$browser_exec" "${@/--private/$private_flag}"
+# A browser is an ordinary desktop application, not a dinit user service.
+# Detach it from the caller while keeping the command on the active Wayland
+# session; this replaces Omarchy's former transient application scope.
+nohup omartix-app -- "$browser_exec" "${@/--private/$private_flag}" >/dev/null 2>&1 &
 
 url=""
 for argument in "$@"; do

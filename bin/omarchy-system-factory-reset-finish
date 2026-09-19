@@ -5,7 +5,8 @@
 # omarchy:hidden=true
 
 # Runs once, early on the first boot after omarchy-system-factory-reset, via
-# omarchy-system-factory-reset-finish.service (armed by /var/lib/omarchy/provisioning/wipe-pending).
+# the dinit omarchy-system-factory-reset-finish service (armed by
+# /var/lib/omarchy/provisioning/wipe-pending).
 # Ordered before home.mount/var-log.mount so @home and @log can be dropped and
 # recreated as empty subvolumes instead of rm -rf'd file by file.
 #
@@ -96,7 +97,7 @@ scrub_legacy_degraded_state() {
   rm -f /var/lib/sddm/state.conf /etc/sddm.conf.d/autologin.conf
 
   # Fresh machine identity from the next boot on.
-  systemd-id128 new >/etc/machine-id 2>/dev/null || :>/etc/machine-id
+  tr -d '-' </proc/sys/kernel/random/uuid >/etc/machine-id
 
   # The kept root still carries its accumulated snapper snapshots (nested under
   # /.snapshots); a factory clone loses them with the old root.
@@ -159,8 +160,8 @@ main() {
   fstrim -a 2>/dev/null || true
 
   rm -f "$PROVISIONING_DIR/wipe-pending" "$PROVISIONING_DIR/wipe-degraded"
-  rm -f /etc/systemd/system/sysinit.target.wants/omarchy-system-factory-reset-finish.service
-  rm -f /etc/systemd/system/omarchy-system-factory-reset-finish.service
+  rm -f /etc/dinit.d/boot.d/omarchy-system-factory-reset-finish
+  rm -f /etc/dinit.d/omarchy-system-factory-reset-finish
 
   log "factory wipe complete"
 }

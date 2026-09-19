@@ -1,0 +1,4 @@
+# The live medium is an installer, not a general-purpose Artix login image.
+# Keep the package-provided boot link satisfied without allowing agetty to
+# spawn an Artix login prompt before the Omarchy installer owns tty1.
+type = internal

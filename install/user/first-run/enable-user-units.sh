@@ -1,21 +1,23 @@
 #!/bin/bash
 
-# Enable AND start the user systemd units we ship. Runs at first-run rather
-# than at finalize-user time because the user manager isn't live during the
-# ISO chroot — by first-run, the Hyprland/uwsm session is up and
-# `systemctl --user enable --now` both writes the correct .wants symlinks
-# (based on each unit's [Install]/WantedBy) and starts the services so the
-# first session has bluetooth pairing, sleep lock, etc. live immediately
-# instead of waiting for the next login. ConditionPath* in the unit files
-# keep the enabled units inert on hardware they don't apply to.
+# Install the Omartix dinit user-service definitions after the graphical
+# session exists. They are started by omarchy-session-init only after it has
+# imported Hyprland's environment, so they never inherit a headless login.
 
 set -euo pipefail
 
-systemctl --user daemon-reload
-systemctl --user enable --now \
-  bt-agent.service \
-  omarchy-recover-internal-monitor.service \
-  omarchy-sleep-lock.service \
-  omarchy-migrate-notify.service \
-  omarchy-fcitx5.service \
-  omarchy-crash-watch.service
+source_dir="$OMARCHY_PATH/install/artix/dinit/user"
+target_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dinit.d"
+
+[[ -d $source_dir ]] || {
+  echo "Omartix dinit user-service definitions are missing" >&2
+  exit 1
+}
+
+install -d "$target_dir"
+for service in "$source_dir"/*; do
+  [[ -f $service ]] || continue
+  install -Dm644 "$service" "$target_dir/$(basename "$service")"
+done
+
+omarchy-session-init

@@ -1,0 +1,100 @@
+# Core Omartix payload. This is deliberately the only distribution-specific
+# runtime package: application packages continue to come from Artix, the
+# explicitly audited Arch extra compatibility repository, or Omarchy.
+
+pkgname=omartix
+pkgver=${OMARTIX_PACKAGE_VERSION:-0.0.0}
+pkgrel=${OMARTIX_PACKAGE_RELEASE:-1}
+pkgdesc='Omarchy experience ported to Artix Linux with dinit and elogind'
+arch=('x86_64')
+url='https://github.com/nokcha75/omartix'
+license=('MIT')
+depends=('bash' 'dinit' 'elogind')
+provides=('omarchy')
+conflicts=('omarchy' 'omarchy-dev' 'omarchy-settings' 'omarchy-settings-dev')
+replaces=('omarchy' 'omarchy-settings')
+options=('!strip')
+source=()
+sha256sums=()
+
+: "${OMARTIX_SRC:?set OMARTIX_SRC to the checked-out Omartix source tree}"
+
+prepare() {
+  install -d "$srcdir/omartix"
+
+  # Do not copy the whole checkout. ISO builds deliberately keep their
+  # disposable art-tools workspace under iso/artix/, and copying it would
+  # recursively copy makepkg's own $srcdir back into itself. This explicit
+  # list is also the complete source payload consumed by package().
+  local source_path
+  for source_path in applications bin config default etc etc-overrides install migrations shell themes logo.txt version; do
+    [[ -e "$OMARTIX_SRC/$source_path" ]] || {
+      printf 'ERROR: Omartix source payload is missing: %s\n' "$source_path" >&2
+      return 1
+    }
+    cp -a --no-preserve=ownership "$OMARTIX_SRC/$source_path" "$srcdir/omartix/"
+  done
+}
+
+package() {
+  cd "$srcdir/omartix"
+
+  install -d "$pkgdir/usr/bin" "$pkgdir/usr/share/omarchy/bin"
+  for command in bin/*; do
+    [[ -f $command ]] || continue
+    name=$(basename "$command")
+    install -Dm755 "$command" "$pkgdir/usr/bin/$name"
+    ln -s "/usr/bin/$name" "$pkgdir/usr/share/omarchy/bin/$name"
+  done
+
+  # Keep the upstream quattro converter in the tree for merges; ship the
+  # Omartix guidance stub so `omarchy upgrade to quattro` cannot rewrite Artix.
+  install -Dm755 install/artix/omarchy-upgrade-to-quattro \
+    "$pkgdir/usr/bin/omarchy-upgrade-to-quattro"
+  install -Dm755 bin/omartix-update-keyring \
+    "$pkgdir/usr/bin/omarchy-update-keyring"
+
+  install -d "$pkgdir/usr/share/omarchy" "$pkgdir/etc/skel/.config"
+  cp -a --no-preserve=ownership applications config default etc-overrides install migrations shell themes \
+    "$pkgdir/usr/share/omarchy/"
+  cp -a --no-preserve=ownership config/. "$pkgdir/etc/skel/.config/"
+
+  # Full configuration files owned by Artix packages must never be installed
+  # by the core archive: pacman rejects the transaction before Omartix's
+  # post-install configuration can run. Their intentional overrides live in
+  # etc-overrides/ and are applied only after the owning package is present.
+  for path in nsswitch.conf security/faillock.conf cups/cups-files.conf plymouth/plymouthd.conf; do
+    [[ ! -e "etc/$path" ]] || {
+      printf 'ERROR: upstream-owned configuration must be in etc-overrides: %s\n' "$path" >&2
+      return 1
+    }
+  done
+  cp -a --no-preserve=ownership etc/. "$pkgdir/etc/"
+  install -Dm644 logo.txt "$pkgdir/usr/share/omarchy/logo.txt"
+  install -Dm644 version "$pkgdir/usr/share/omarchy/version"
+
+  # SDDM looks in the system theme path, not under /usr/share/omarchy/default.
+  install -d "$pkgdir/usr/share/sddm/themes"
+  cp -a --no-preserve=ownership default/sddm/omarchy "$pkgdir/usr/share/sddm/themes/omarchy"
+  install -Dm644 default/sddm/hyprland.lua "$pkgdir/usr/share/sddm/hyprland.lua"
+  install -Dm644 default/wayland-sessions/omarchy.desktop \
+    "$pkgdir/usr/local/share/wayland-sessions/omarchy.desktop"
+
+  # Omartix is dinit-only. These guards also keep a future upstream merge from
+  # accidentally reintroducing systemd payload into a published package.
+  rm -rf "$pkgdir/usr/share/omarchy/default/systemd" \
+    "$pkgdir/usr/share/omarchy/default/uwsm" "$pkgdir/etc/systemd"
+
+  # The upstream UKI drop-in requires the systemd UKI toolchain. Artix+dinit
+  # uses the regular Limine/mkinitcpio entry path instead; keeping this file
+  # makes limine-update silently leave an entry-less boot menu.
+  rm -f "$pkgdir/etc/limine-entry-tool.d/omarchy-uki.conf"
+
+  # Artix substitutions: keep upstream files in the tree for merges.
+  install -Dm644 install/artix/omarchy-defaults.conf \
+    "$pkgdir/etc/limine-entry-tool.d/omarchy-defaults.conf"
+  install -Dm644 install/artix/omarchy-other.packages \
+    "$pkgdir/usr/share/omarchy/install/omarchy-other.packages"
+  install -Dm644 install/artix/hardware/all.sh \
+    "$pkgdir/usr/share/omarchy/install/hardware/all.sh"
+}

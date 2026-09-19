@@ -1,0 +1,86 @@
+# Packages installed outside of install/packages.sh or optional packages
+# Utilized by ISO builder to ensure package availability in the ISO
+
+autoconf-archive
+asusctl
+avahi-dinit
+base
+base-devel
+bluez-dinit
+broadcom-wl-dkms
+btrfs-progs
+cups-dinit
+dbus-dinit
+dbus-dinit-user
+dkms
+docker-dinit
+earlyoom
+earlyoom-dinit
+egl-wayland
+elogind-dinit
+gst-plugin-pipewire
+gtk4-layer-shell
+libpulse
+intel-ipu7-camera
+intel-media-driver
+libva-intel-driver
+libva-nvidia-driver
+limine
+limine-mkinitcpio-hook
+limine-snapper-sync
+limine-snapper-sync-dinit
+linux
+linux-firmware
+linux-headers
+ntp
+macbook12-spi-driver-dkms
+nvidia-580xx-dkms
+nvidia-dkms
+nvidia-open-dkms
+nvidia-580xx-utils
+nvidia-utils
+networkmanager-dinit
+lib32-nvidia-580xx-utils
+lib32-nvidia-utils
+pipewire
+pipewire-alsa
+pipewire-jack
+pipewire-pulse
+pipewire-dinit
+pipewire-pulse-dinit
+qt6-wayland
+snapper
+sddm-dinit
+sof-firmware
+thermald
+thermald-dinit
+tlp-dinit
+webp-pixbuf-loader
+wireplumber-dinit
+yay-debug
+tuxedo-drivers-nocompatcheck-dkms
+yt6801-dkms
+zramen
+zramen-dinit
+
+# Intel encoding processing
+libvpl
+vpl-gpu-rt
+
+# Vulkan drivers (auto-detected by hardware)
+vulkan-intel
+vulkan-radeon
+vulkan-asahi
+
+# Surface laptop support packages
+linux-firmware-marvell
+
+# Dell laptop support packages
+dell-xps-touchpad-haptics
+dell-xps13-sidecar-amps
+
+# Speaker tunings (LV2 limiter every tuning ends in)
+lsp-plugins-lv2
+
+# Framework 16
+qmk-hid

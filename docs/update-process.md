@@ -128,7 +128,7 @@ omarchy-update
   │       before the snapshot since the cache lives on the snapshotted subvolume
   ├─ create snapper snapshot (skipped silently without snapper; snapper
   │  installed but unconfigured fails the snapshot loudly, pointing at
-  │  install/config/snapper.sh, and the update continues without one)
+  │  install/dinit/config/snapper.sh, and the update continues without one)
   ├─ omarchy-update-stay-awake start
   ├─ run package updates, migrations, hooks, and log analysis
   ├─ omarchy-update-status

@@ -12,9 +12,9 @@ log_file="$test_tmp/keyring.log"
 mkdir -p "$stub_bin"
 
 # Behavior is driven by env vars so each case can pick its failure point:
-# KEYRING_TEST_PKG_MISSING     exit status of omarchy-pkg-missing (default 1: installed)
-# KEYRING_TEST_LIST_FAIL_ON    which --list-keys call fails, counted per run (default: none)
-# KEYRING_TEST_RECV_STATUS     exit status of --recv-keys (default 0)
+# KEYRING_TEST_PKG_MISSING      exit status of omarchy-pkg-missing (default 1: installed)
+# KEYRING_TEST_LIST_FAIL_ON     which --list-keys call fails, counted per run (default: none)
+# KEYRING_TEST_CURL_STATUS      exit status of curl (default 0)
 # KEYRING_TEST_REINSTALL_STATUS exit status of the archlinux-keyring reinstall (default 0)
 cat >"$stub_bin/sudo" <<'SH'
 #!/bin/bash
@@ -35,8 +35,8 @@ if [[ $1 == "pacman-key" && $2 == "--list-keys" ]]; then
   exit 0
 fi
 
-if [[ $1 == "pacman-key" && $2 == "--recv-keys" ]]; then
-  exit "${KEYRING_TEST_RECV_STATUS:-0}"
+if [[ $1 == "pacman-key" && $2 == "--add" ]]; then
+  exit 0
 fi
 
 if [[ $1 == "pacman-key" && $2 == "--lsign-key" ]]; then
@@ -66,11 +66,38 @@ exit 0
 SH
 chmod +x "$stub_bin/omarchy-pkg-add"
 
+cat >"$stub_bin/omarchy-cmd-present" <<'SH'
+#!/bin/bash
+
+[[ $1 == curl ]]
+SH
+chmod +x "$stub_bin/omarchy-cmd-present"
+
+cat >"$stub_bin/curl" <<'SH'
+#!/bin/bash
+
+printf 'curl' >>"$KEYRING_TEST_LOG"
+for arg in "$@"; do
+  printf '\t%s' "$arg" >>"$KEYRING_TEST_LOG"
+done
+printf '\n' >>"$KEYRING_TEST_LOG"
+exit "${KEYRING_TEST_CURL_STATUS:-0}"
+SH
+chmod +x "$stub_bin/curl"
+
+cat >"$stub_bin/gpg" <<'SH'
+#!/bin/bash
+
+printf 'gpg\n' >>"$KEYRING_TEST_LOG"
+printf 'fpr:::::::::40DFB630FF42BCFFB047046CF0134EE680CAC571:\n'
+SH
+chmod +x "$stub_bin/gpg"
+
 run_keyring() {
   KEYRING_TEST_LOG="$log_file" \
     KEYRING_TEST_DIR="$test_tmp" \
     PATH="$stub_bin:$PATH" \
-    "$ROOT/bin/omarchy-update-keyring" "$@"
+    "$ROOT/bin/omartix-update-keyring" "$@"
 }
 
 # Everything healthy: the key and package are present, the reinstall works.
@@ -93,25 +120,25 @@ KEYRING_TEST_PKG_MISSING=0 run_keyring >"$test_tmp/populate.out"
 
 grep -F "Keys are correct" "$test_tmp/populate.out" >/dev/null ||
   fail "update-keyring populates a missing keyring and reports success" "$(cat "$test_tmp/populate.out")"
-for expected in 'recv-keys' 'lsign-key' $'pkg-add\tomarchy-keyring'; do
+for expected in 'curl' 'lsign-key' $'pkg-add\tomarchy-keyring'; do
   grep -Eq "$expected" "$log_file" ||
     fail "update-keyring populates a missing keyring and reports success" "$(cat "$log_file")"
 done
 pass "update-keyring populates a missing keyring and reports success"
 
-# recv-keys failing must stop the script, not end in "Keys are correct".
+# curl failing must stop the script, not end in "Keys are correct".
 : >"$log_file"
 rm -f "$test_tmp/list-calls"
-if KEYRING_TEST_PKG_MISSING=0 KEYRING_TEST_RECV_STATUS=1 run_keyring >"$test_tmp/recv.out" 2>&1; then
-  fail "update-keyring fails when recv-keys fails"
+if KEYRING_TEST_PKG_MISSING=0 KEYRING_TEST_CURL_STATUS=1 run_keyring >"$test_tmp/recv.out" 2>&1; then
+  fail "update-keyring fails when key download fails"
 fi
 if grep -F "Keys are correct" "$test_tmp/recv.out" >/dev/null; then
-  fail "update-keyring fails when recv-keys fails" "$(cat "$test_tmp/recv.out")"
+  fail "update-keyring fails when key download fails" "$(cat "$test_tmp/recv.out")"
 fi
 if grep -q 'lsign-key' "$log_file"; then
-  fail "update-keyring stops at the failed recv instead of signing anyway" "$(cat "$log_file")"
+  fail "update-keyring stops at the failed download instead of signing anyway" "$(cat "$log_file")"
 fi
-pass "update-keyring fails when recv-keys fails"
+pass "update-keyring fails when key download fails"
 
 # A failed archlinux-keyring reinstall must not end in success either.
 : >"$log_file"

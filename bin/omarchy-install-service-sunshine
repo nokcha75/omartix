@@ -69,9 +69,27 @@ enable_hyprland_autostart() {
   fi
 }
 
+install_dinit_service() {
+  # Sunshine needs Hyprland's Wayland environment, so its user service is
+  # started from the graphical-session autostart rather than user boot.d.
+  HYPR_AUTOSTART_ENTRY='o.launch_on_start("dinitctl --user start sunshine")'
+  install -d "$HOME/.config/dinit.d"
+  install -Dm644 /dev/stdin "$HOME/.config/dinit.d/sunshine" <<'DINIT'
+type = process
+command = /usr/bin/sunshine
+restart = true
+restart-delay = 5
+DINIT
+  dinitctl --user start sunshine
+}
+
 echo "Installing Sunshine..."
 omarchy-pkg-add sunshine
-systemctl --user enable --now sunshine
+if ! dinitctl --user list >/dev/null 2>&1; then
+  echo "Error: Sunshine requires the Omartix dinit user manager." >&2
+  exit 1
+fi
+install_dinit_service
 
 echo "Opening Sunshine firewall ports..."
 open_ufw_ports

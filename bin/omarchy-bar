@@ -172,7 +172,7 @@ cmd_defaults() {
   done
 
   # This remains one file mutation so it also works during the headless
-  # Quattro upgrade and cannot race the shell's in-memory config.
+  # first-run migration and cannot race the shell's in-memory config.
   commit "$NORMALIZE
     | .bar = \$defaults[0].bar
     | def entry_id: if type == \"object\" then (.id // \"\" | tostring) else tostring end;

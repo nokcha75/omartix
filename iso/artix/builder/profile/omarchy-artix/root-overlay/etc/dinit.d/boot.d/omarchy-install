@@ -1,0 +1,3 @@
+# dinit's boot.d directory activates services by name. Keep the definition in
+# the normal service directory so the boot dependency resolver can find it.
+@include ../omarchy-install

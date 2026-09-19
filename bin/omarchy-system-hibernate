@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Hibernate through elogind
+
+exec /usr/bin/loginctl hibernate

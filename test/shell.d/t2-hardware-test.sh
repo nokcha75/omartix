@@ -2,25 +2,25 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 fix_t2="$ROOT/install/hardware/apple/fix-t2.sh"
-other_packages="$ROOT/install/omarchy-other.packages"
+other_packages="$ROOT/install/artix/omarchy-other.packages"
 migration="$ROOT/migrations/1785944594.sh"
+compatibility_note="$ROOT/docs/dinit-compatibility.md"
 
-grep -Fq 'KERNEL_CMDLINE[default]+=" intel_iommu=on iommu=pt pm_async=off mem_sleep_default=deep"' "$fix_t2" ||
-  fail "T2 setup installs the suspend kernel parameters"
-! grep -q 'pcie_ports=compat' "$fix_t2" ||
-  fail "T2 setup drops the obsolete PCIe compatibility parameter"
-(( $(grep -Ec '^\[Fan[12]\]$' "$fix_t2") == 2 )) ||
-  fail "T2 setup configures both possible MacBook fans"
-(( $(grep -c '^speed_curve=linear$' "$fix_t2") == 2 )) ||
-  fail "T2 setup preserves the tuned linear curve for both fans"
-! grep -q 'tiny-dfr' "$fix_t2" ||
-  fail "T2 setup leaves optional Touch Bar customization uninstalled"
-! grep -qx 'tiny-dfr' "$other_packages" ||
-  fail "the ISO no longer caches tiny-dfr"
-pass "fresh T2 setup uses t2bce-compatible suspend, fan, and Touch Bar defaults"
+! rg -q 'omarchy-pkg-add|\b(systemctl|dinitctl)\b' "$fix_t2" ||
+  fail "fresh T2 setup does not attempt unsupported packages or services"
+for package in apple-bcm-firmware apple-t2-audio-config linux-t2 linux-t2-headers t2fanrd tiny-dfr; do
+  ! grep -Fxq "$package" "$other_packages" ||
+    fail "the base package manifest does not contain unsupported T2 package $package"
+done
+grep -F 'Apple T2 MacBook support stack' "$compatibility_note" >/dev/null ||
+  fail "the T2 omission is documented"
+grep -F 'complete T2 kernel, firmware, audio, and fan-control stack' "$compatibility_note" >/dev/null ||
+  fail "the T2 omission records a restoration condition"
+pass "fresh T2 setup is omitted until Artix can support the complete stack"
 
 test_tmp=$(mktemp -d)
 trap 'rm -rf "$test_tmp"' EXIT
@@ -53,10 +53,10 @@ printf '\n' >>"$TEST_LOG"
 "$@"
 SH
 
-cat >"$stub_bin/systemctl" <<'SH'
+cat >"$stub_bin/pkill" <<'SH'
 #!/bin/bash
 
-printf 'systemctl' >>"$TEST_LOG"
+printf 'pkill' >>"$TEST_LOG"
 printf '\t%s' "$@" >>"$TEST_LOG"
 printf '\n' >>"$TEST_LOG"
 SH
@@ -119,10 +119,13 @@ grep -Fq 'KERNEL_CMDLINE[default]+=" intel_iommu=on iommu=pt pm_async=off mem_sl
   fail "T2 migration removes the obsolete PCIe compatibility parameter"
 (( $(grep -Ec '^[[:space:]]*\[Fan2\][[:space:]]*$' "$fan_conf") == 1 )) ||
   fail "T2 migration adds exactly one second-fan section"
-grep -Fq $'systemctl\tdisable\t--now\ttiny-dfr.service' "$calls" ||
-  fail "T2 migration disables tiny-dfr"
+grep -Fq $'pkill\t-x\ttiny-dfr' "$calls" ||
+  fail "T2 migration stops a leftover tiny-dfr process"
 grep -Fq $'omarchy-pkg-drop\ttiny-dfr' "$calls" ||
   fail "T2 migration removes tiny-dfr"
+if rg -n '\bsystemctl\b' "$migration" >/dev/null; then
+  fail "T2 migration has no systemd service-manager path"
+fi
 grep -Fxq 'limine-mkinitcpio' "$calls" ||
   fail "T2 migration rebuilds the boot image"
 [[ -f $repair_marker ]] || fail "T2 migration records the machine-wide repair"

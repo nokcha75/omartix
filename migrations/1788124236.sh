@@ -1,7 +1,10 @@
+#!/bin/bash
+
 echo "Disable SSH password authentication, or sshd itself when no key is authorized"
 
 config=/etc/ssh/sshd_config.d/10-omarchy-hardening.conf
 authorized_keys="$HOME/.ssh/authorized_keys"
+dinit_boot_dir=/etc/dinit.d/boot.d
 
 as_root() {
   if (( EUID == 0 )); then
@@ -30,8 +33,10 @@ fi
 # marker saying that Omarchy configured it. Limit the repair to a daemon that is
 # enabled or currently exposed and a user who already has a usable authorized
 # key. A machine that never set SSH up exits without prompting for privileges.
-if ! systemctl is-enabled --quiet sshd.service 2>/dev/null &&
-  ! systemctl is-active --quiet sshd.service 2>/dev/null; then
+sshd_enabled() { [[ -e "$dinit_boot_dir/sshd" ]]; }
+sshd_active() { dinitctl is-started sshd >/dev/null 2>&1; }
+
+if ! sshd_enabled && ! sshd_active; then
   exit 0
 fi
 
@@ -67,7 +72,7 @@ fi
 # desktop distro, so the console remains; re-enabling password SSH afterwards
 # is an intentional, informed choice the warning explains how to make.
 if [[ ! -f $authorized_keys ]] || ! has_usable_key; then
-  if ! as_root systemctl disable --now sshd.service; then
+  if ! as_root dinitctl stop sshd || ! as_root dinitctl disable sshd; then
     echo "Administrator privileges are required to close the password-only SSH server. Run omarchy-migrate again from a terminal." >&2
     exit 1
   fi
@@ -125,9 +130,9 @@ fi
 # An enabled but deliberately stopped daemon picks the file up on its next
 # start. Reload only a daemon that is currently serving connections so existing
 # sessions survive while new ones get the hardened policy.
-if systemctl is-active --quiet sshd.service 2>/dev/null; then
-  if ! as_root systemctl reload sshd.service; then
-    echo "The hardening config is installed and valid, but sshd did not reload; it takes effect when sshd next restarts." >&2
+if sshd_active; then
+  if ! as_root dinitctl restart sshd; then
+    echo "The hardening config is installed and valid, but sshd did not restart; it takes effect when sshd next starts." >&2
     exit 0
   fi
 fi

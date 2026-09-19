@@ -1,0 +1,5 @@
+type = process
+command = /usr/bin/omarchy-system-sleep-monitor --inhibited
+depends-on = dbus
+restart = true
+restart-delay = 2

@@ -4,7 +4,7 @@
 # omarchy:requires-sudo=true
 # omarchy:hidden=true
 
-# Runs on tty1 via omarchy-provision-owner.service when /var/lib/omarchy/provisioning/pending
+# Runs on tty1 via the dinit omarchy-provision-owner service when /var/lib/omarchy/provisioning/pending
 # exists — the state a deferred-provisioning ISO install or omarchy-system-factory-reset leaves
 # behind. Asks for the user (the configurator's Step 2), creates it with the
 # groups system setup recorded, finalizes it offline from the stashed Node
@@ -32,6 +32,10 @@ if [[ -f $PROVISIONING_DIR/wipe-pending ]]; then
 fi
 
 export PATH="$OMARCHY_PATH/bin:$PATH"
+
+reboot_machine() {
+  exec reboot
+}
 
 # The shared setup form — the same questions, prompts, and validation the ISO
 # configurator's user step asks. The ISO vendors this very file out of the
@@ -595,7 +599,7 @@ keyboard_form() {
     # safe but not an escape from setup: this service runs again at next boot,
     # and encrypted machines still auto-unlock from the staged keyfile until the
     # re-key below. Confirm it so a stray Ctrl+C doesn't bounce the machine.
-    confirm_reboot && exec systemctl reboot
+    confirm_reboot && reboot_machine
   done
 
   apply_keyboard "$keyboard"
@@ -609,22 +613,12 @@ confirm_reboot() {
   gum confirm --affirmative "Yes, reboot" --negative "No, keep setting up" "Reboot this machine?"
 }
 
-# Load the layout on the live VT and persist it for the installed system.
-# systemd-firstboot writes both the console KEYMAP and the XKB layout Hyprland
-# reads, matching what the ISO's configure_keyboard does at install time. A
-# keymap localectl doesn't know keeps the default rather than failing (defensive;
-# the picker no longer offers any such layout).
+# Load the layout on the live VT and persist the console keymap and XKB layout
+# Hyprland reads.
 apply_keyboard() {
   local keymap="$1"
   [[ $(tty 2>/dev/null) == /dev/tty* ]] && loadkeys "$keymap" 2>/dev/null || true
-
-  if localectl --no-pager list-keymaps 2>/dev/null | grep -qix "$keymap"; then
-    systemd-firstboot --keymap="$keymap" --force >>"$LOG_FILE" 2>&1 || \
-      localectl set-keymap "$keymap" >>"$LOG_FILE" 2>&1 || \
-      log_step "could not persist keymap $keymap"
-  else
-    log_step "keymap $keymap unknown to localectl; keeping the default"
-  fi
+  printf 'KEYMAP=%s\nXKBLAYOUT=%s\n' "$keymap" "$keymap" >/etc/vconsole.conf
 }
 
 # The same username/password/name/email form as the ISO configurator's Step 2.
@@ -784,51 +778,36 @@ configure_login() {
 
 # Install a self-removing service that makes the autologin last exactly one
 # boot — this one, where the owner just authenticated in the wizard. The unit is
-# created now, but graphical.target's job for THIS boot is already computed, so
-# it won't run this boot (this boot autologins). On the NEXT boot it's in the
-# fresh transaction, ordered Before the display manager, so it runs before SDDM
-# reads its config: it removes the autologin drop-in (that boot shows the normal
-# login) and deletes its own unit and enablement symlink. Ordering Before= (not
-# After=) is what makes it deterministic — no sleep/race against SDDM's startup.
+# created now, but SDDM is already running on this boot. On the next boot dinit
+# runs it before SDDM, so it removes the drop-in before SDDM reads it and then
+# removes its own service and enablement link. No sleep/race is involved.
 install_autologin_once_cleanup() {
-  local unit=omarchy-provision-autologin-once.service
-  sed "s|@UNIT@|$unit|g" >"/etc/systemd/system/$unit" <<'UNIT'
-[Unit]
-Description=Drop the first-boot autologin before the next login
-Before=display-manager.service
-ConditionPathExists=/etc/sddm.conf.d/autologin.conf
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/rm -f /etc/sddm.conf.d/autologin.conf
-ExecStartPost=/usr/bin/rm -f /etc/systemd/system/graphical.target.wants/@UNIT@ /etc/systemd/system/@UNIT@
-
-[Install]
-WantedBy=graphical.target
-UNIT
-  mkdir -p /etc/systemd/system/graphical.target.wants
-  ln -sf "../$unit" "/etc/systemd/system/graphical.target.wants/$unit"
+  install -d /etc/dinit.d /etc/dinit.d/boot.d
+  cat >/etc/dinit.d/omarchy-provision-autologin-once <<'SERVICE'
+type = process
+command = /usr/bin/omarchy-provision-autologin-once
+before = sddm
+SERVICE
+  ln -sfn ../omarchy-provision-autologin-once \
+    /etc/dinit.d/boot.d/omarchy-provision-autologin-once
 }
 
 # Apply the owner's hostname, deferred to first boot with the rest of the user
 # step, overwriting the placeholder the deferred install seeded.
 configure_hostname() {
   [[ -n ${hostname:-} ]] || return 0
-  hostnamectl set-hostname "$hostname" 2>&1 ||
-    printf '%s\n' "$hostname" >/etc/hostname
+  printf '%s\n' "$hostname" >/etc/hostname
 }
 
 # Apply the owner's timezone, deferred to first boot with the rest of the user
 # step, overwriting the placeholder (UTC) the deferred install seeded.
 configure_timezone() {
   [[ -n ${timezone:-} ]] || return 0
-  if timedatectl set-timezone "$timezone" 2>&1; then
-    return 0
-  fi
-  # Fallback only if the zone file exists, so a bad zone can't point
-  # /etc/localtime at nothing and break every localtime read afterward.
-  [[ -e /usr/share/zoneinfo/$timezone ]] &&
-    ln -sf "/usr/share/zoneinfo/$timezone" /etc/localtime 2>&1 || true
+  # Validate before changing either timezone file so a malformed installer
+  # answer cannot leave localtime dangling.
+  [[ -e /usr/share/zoneinfo/$timezone ]] || return 0
+  ln -sfn "/usr/share/zoneinfo/$timezone" /etc/localtime
+  printf '%s\n' "$timezone" >/etc/timezone
 }
 
 finalize_user() {
@@ -992,8 +971,7 @@ cleanup_oem_state() {
   # tarball from these live copies when the factory snapshot predates it.
   rm -f "$PROVISIONING_DIR/pending" "$PROVISIONING_DIR/authorized_keys" "$PROVISIONING_DIR/setup-user"
 
-  rm -f /etc/systemd/system/multi-user.target.wants/omarchy-provision-owner.service
-  systemctl daemon-reload 2>/dev/null || true
+  rm -f /etc/dinit.d/boot.d/omarchy-provision-owner /etc/dinit.d/omarchy-provision-owner
 }
 
 # The provisioning work, backgrounded under the progress screen. Phase writes
@@ -1048,7 +1026,7 @@ run_setup() {
     if ((status != 0)); then
       # Esc unwinds to the keyboard step. Ctrl+C is the only other way out of a
       # prompt, and it offers the reboot instead of returning a value.
-      ((status == OMARCHY_FORM_SIGNAL)) && confirm_reboot && exec systemctl reboot
+      ((status == OMARCHY_FORM_SIGNAL)) && confirm_reboot && reboot_machine
       continue
     fi
     confirm_form && break

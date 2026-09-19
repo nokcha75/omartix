@@ -1,0 +1,4 @@
+# The Artix live root is an overlayfs. It cannot be remounted read-only like
+# an installed root filesystem, but later early-boot targets still depend on
+# this service as the point where root setup is complete.
+type = internal

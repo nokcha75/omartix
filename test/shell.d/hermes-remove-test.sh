@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 test_tmp=$(mktemp -d)
@@ -50,11 +51,6 @@ if [[ -n ${OMARCHY_TEST_PROMPT_GATE:-} ]]; then
 fi
 exit "${OMARCHY_TEST_GUM_STATUS:-1}"
 SH
-cat >"$mock_bin/systemctl" <<'SH'
-#!/bin/bash
-echo "systemctl $*" >>"$OMARCHY_TEST_SYSTEMCTL_LOG"
-SH
-
 chmod +x "$mock_bin"/*
 
 seed_install() {
@@ -79,13 +75,11 @@ seed_install() {
 remove() {
   : >"$test_tmp/installer-log"
   : >"$test_tmp/gum-log"
-  : >"$test_tmp/systemctl-log"
   OMARCHY_TEST_DROP_LOG="$test_tmp/drop-log" \
     OMARCHY_TEST_INSTALLER_LOG="$test_tmp/installer-log" \
     OMARCHY_TEST_INSTALLER_STATUS="${OMARCHY_TEST_INSTALLER_STATUS:-0}" \
-    OMARCHY_TEST_SYSTEMCTL_LOG="$test_tmp/systemctl-log" \
     OMARCHY_TEST_GUM_LOG="$test_tmp/gum-log" \
-    HOME="$test_home" PATH="$mock_bin:$PATH" \
+    HOME="$test_home" PATH="$mock_bin:$ROOT/bin:$PATH" \
     bash "$test_tmp/remover" </dev/null >"$test_tmp/output" 2>&1
 }
 
@@ -94,13 +88,11 @@ remove() {
 remove_tty() {
   : >"$test_tmp/installer-log"
   : >"$test_tmp/gum-log"
-  : >"$test_tmp/systemctl-log"
   OMARCHY_TEST_DROP_LOG="$test_tmp/drop-log" \
     OMARCHY_TEST_INSTALLER_LOG="$test_tmp/installer-log" \
-    OMARCHY_TEST_SYSTEMCTL_LOG="$test_tmp/systemctl-log" \
     OMARCHY_TEST_GUM_LOG="$test_tmp/gum-log" \
     OMARCHY_TEST_GUM_STATUS="${OMARCHY_TEST_GUM_STATUS:-1}" \
-    HOME="$test_home" PATH="$mock_bin:$PATH" \
+    HOME="$test_home" PATH="$mock_bin:$ROOT/bin:$PATH" \
     script -qec "bash '$test_tmp/remover'" /dev/null >"$test_tmp/output" 2>&1
 }
 
@@ -114,9 +106,9 @@ remove || fail "remove succeeds"
 [[ ! -d $test_home/.hermes/node ]] || fail "the node the app installed is removed"
 pass "removal takes the whole runtime the app installed"
 
-grep -Fxq 'systemctl --user stop omarchy-hermes-theme.service' "$test_tmp/systemctl-log" ||
-  fail "the unit the installer left waiting to hand over the theme is stopped" "$(cat "$test_tmp/systemctl-log")"
-pass "removal stops the installer's theme hand-over"
+! rg -q '\bsystemctl\b|\bsystemd-run\b' "$ROOT/bin/omarchy-remove-ai-hermes" ||
+  fail "removal has no systemd theme hand-over"
+pass "removal needs no service-manager theme cleanup"
 
 [[ -d $test_home/.config/Hermes ]] ||
   fail "gateway connections, tokens and settings survive removal"

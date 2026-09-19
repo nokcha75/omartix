@@ -2,23 +2,24 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
 source "$(dirname "$0")/base-test.sh"
 
 test_dir=$(mktemp -d)
 trap 'rm -rf "$test_dir"' EXIT
 
+# shellcheck disable=SC2153
 migration="$ROOT/migrations/1788124236.sh"
 stub_bin="$test_dir/bin"
 mkdir -p "$stub_bin"
 
-cat >"$stub_bin/systemctl" <<'STUB'
+cat >"$stub_bin/dinitctl" <<'STUB'
 #!/bin/bash
-printf 'systemctl %s\n' "$*" >>"${CALL_LOG:?}"
+printf 'dinitctl %s\n' "$*" >>"${CALL_LOG:?}"
 case "$1 $2" in
-"is-enabled --quiet") [[ ${SSHD_ENABLED:-0} == 1 ]] ;;
-"is-active --quiet") [[ ${SSHD_ACTIVE:-0} == 1 ]] ;;
-"reload sshd.service") [[ ${SSHD_RELOAD_VALID:-1} == 1 ]] ;;
-"disable --now") ;;
+"is-started sshd") [[ ${SSHD_ACTIVE:-0} == 1 ]] ;;
+"restart sshd") [[ ${SSHD_RELOAD_VALID:-1} == 1 ]] ;;
+"stop sshd"|"disable sshd") ;;
 *) exit 2 ;;
 esac
 STUB
@@ -57,6 +58,10 @@ run_migration() {
   local config="$root/etc/ssh/sshd_config.d/10-omarchy-hardening.conf"
 
   mkdir -p "$home/.ssh" "${config%/*}"
+  if [[ ${SSHD_ENABLED:-0} == 1 ]]; then
+    mkdir -p "$root/etc/dinit.d/boot.d"
+    : >"$root/etc/dinit.d/boot.d/sshd"
+  fi
   chmod "${HOME_MODE:-755}" "$home"
   : >"$test_dir/$scenario.calls"
   case "${AUTHORIZED_KEY_STATE:-valid}" in
@@ -83,7 +88,8 @@ run_migration() {
   # Keep the privileged production destination fixed in the shipped migration.
   # For this isolated test only, rewrite that one assignment in the input fed to
   # bash so no scenario can touch the host's /etc.
-  sed "s|^config=/etc/ssh/sshd_config.d/10-omarchy-hardening.conf$|config=$config|" "$migration" |
+  sed -e "s|^config=/etc/ssh/sshd_config.d/10-omarchy-hardening.conf$|config=$config|" \
+      -e "s|^dinit_boot_dir=/etc/dinit.d/boot.d$|dinit_boot_dir=$root/etc/dinit.d/boot.d|" "$migration" |
     HOME="$home" CALL_LOG="$test_dir/$scenario.calls" PATH="$stub_bin:$PATH" \
       SSHD_ENABLED="${SSHD_ENABLED:-0}" SSHD_ACTIVE="${SSHD_ACTIVE:-0}" \
       SSHD_SYNTAX_VALID="${SSHD_SYNTAX_VALID:-1}" \
@@ -95,7 +101,7 @@ run_migration() {
 }
 
 sshd_disabled() {
-  grep -qxF "sudo systemctl disable --now sshd.service" "$test_dir/$1.calls"
+  grep -qxF "sudo dinitctl disable sshd" "$test_dir/$1.calls"
 }
 
 SSHD_ENABLED=0 SSHD_ACTIVE=0 run_migration disabled
@@ -165,13 +171,13 @@ grep -qxF "KbdInteractiveAuthentication no" "$config" || fail "SSH migration dis
   fail "SSH migration tightens authorized_keys so StrictModes accepts the key"
 grep -qxF "sudo sshd -t" "$test_dir/active.calls" || fail "SSH migration validates sshd syntax"
 grep -qxF "sudo sshd -T" "$test_dir/active.calls" || fail "SSH migration validates effective sshd settings"
-grep -qxF "sudo systemctl reload sshd.service" "$test_dir/active.calls" || fail "SSH migration reloads an active daemon"
-pass "SSH migration hardens and reloads an existing key-based SSH setup"
+grep -qxF "sudo dinitctl restart sshd" "$test_dir/active.calls" || fail "SSH migration restarts an active daemon"
+pass "SSH migration hardens and restarts an existing key-based SSH setup"
 
 SSHD_ENABLED=1 SSHD_ACTIVE=0 run_migration stopped >/dev/null
 [[ -e $test_dir/stopped/root/etc/ssh/sshd_config.d/10-omarchy-hardening.conf ]] ||
   fail "SSH migration hardens an enabled but stopped daemon"
-! grep -qF 'reload sshd.service' "$test_dir/stopped.calls" || fail "SSH migration must not start or reload a stopped daemon"
+! grep -qF 'restart sshd' "$test_dir/stopped.calls" || fail "SSH migration must not start or restart a stopped daemon"
 pass "SSH migration hardens an enabled daemon without starting it"
 
 # Conditions the migration cannot repair complete with a notice — leaving the
@@ -180,14 +186,14 @@ SSHD_ENABLED=1 SSHD_ACTIVE=1 SSHD_PASSWORD_AUTH=yes run_migration ineffective >"
   fail "an ineffective drop-in must complete without blocking later migrations"
 [[ ! -e $test_dir/ineffective/root/etc/ssh/sshd_config.d/10-omarchy-hardening.conf ]] ||
   fail "SSH migration removes an ineffective config"
-! grep -qF 'reload sshd.service' "$test_dir/ineffective.calls" || fail "SSH migration must not reload ineffective hardening"
+! grep -qF 'restart sshd' "$test_dir/ineffective.calls" || fail "SSH migration must not restart ineffective hardening"
 pass "SSH migration backs off when another rule keeps password authentication enabled"
 
 SSHD_ENABLED=1 SSHD_ACTIVE=1 SSHD_SYNTAX_VALID=0 run_migration invalid-config >"$test_dir/invalid-config.output" 2>&1 ||
   fail "a rejected config must complete without blocking later migrations"
 [[ ! -e $test_dir/invalid-config/root/etc/ssh/sshd_config.d/10-omarchy-hardening.conf ]] ||
   fail "SSH migration removes a rejected config"
-! grep -qF 'reload sshd.service' "$test_dir/invalid-config.calls" || fail "SSH migration must not reload rejected hardening"
+! grep -qF 'restart sshd' "$test_dir/invalid-config.calls" || fail "SSH migration must not restart rejected hardening"
 pass "SSH migration backs off when sshd rejects the config"
 
 # The installed config is valid, so a failed reload only delays it until the

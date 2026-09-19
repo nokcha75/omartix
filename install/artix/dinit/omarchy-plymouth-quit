@@ -1,0 +1,8 @@
+# Release the boot splash before SDDM takes VT1. If plymouth still holds the
+# DRM device, start-hyprland exits immediately and SDDM falls back to a greeter
+# that never paints over the splash.
+type = scripted
+command = /usr/bin/omarchy-plymouth-quit
+depends-on = local.target
+before = sddm
+restart = false

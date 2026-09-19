@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Launch a graphical application directly from the active Hyprland session.
+# dinit supervises long-running user services; ordinary desktop applications
+# remain independent processes, just as they do when started from a launcher.
+
+set -euo pipefail
+
+[[ ${1:-} == -- ]] && shift
+(( $# > 0 )) || {
+  echo "usage: omartix-app -- COMMAND [ARG...]" >&2
+  exit 64
+}
+
+exec "$@"

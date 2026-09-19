@@ -13,7 +13,6 @@ const videoQml = fs.readFileSync(path.join(root, 'shell/Ui/BackgroundVideo.qml')
 const backgroundQml = fs.readFileSync(path.join(root, 'shell/plugins/background/Background.qml'), 'utf8')
 const lockQml = fs.readFileSync(path.join(root, 'shell/plugins/lock/LockView.qml'), 'utf8')
 const themeSwitcher = fs.readFileSync(path.join(root, 'bin/omarchy-theme-switcher'), 'utf8')
-const quattroUpgrade = fs.readFileSync(path.join(root, 'bin/omarchy-upgrade-to-quattro'), 'utf8')
 const multimediaMigration = fs.readFileSync(path.join(root, 'migrations/1786609204.sh'), 'utf8')
 const barTextColor = fs.readFileSync(path.join(root, 'bin/omarchy-bar-text-color'), 'utf8')
 const menuImages = fs.readFileSync(path.join(root, 'bin/omarchy-menu-images'), 'utf8')
@@ -185,10 +184,9 @@ assert(
     themeSwitcher.includes('preview.mp4'),
   'theme switcher previews video-only themes, named preview files included'
 )
-assert(quattroUpgrade.includes("-iname '*.mp4'"), 'Quattro upgrade can seed a video-only theme background')
 assert(
   multimediaMigration.includes('omarchy-pkg-add qt6-multimedia qt6-multimedia-ffmpeg'),
-  'existing Quattro installations receive video playback dependencies'
+  'existing installations receive video playback dependencies'
 )
 JS
 

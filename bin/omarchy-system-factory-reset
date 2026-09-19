@@ -10,9 +10,8 @@
 #
 # The running root (@) is swapped for a fresh writable clone of the @factory
 # snapshot, so user-installed packages and /etc drift are gone too. That
-# snapshot is taken by the Omarchy Quattro installer, so only machines
-# installed from that ISO can be reset; a machine upgraded to Quattro from an
-# earlier version has no baseline to return to and is turned away.
+# snapshot is taken by the Omartix installer, so only machines installed from
+# that ISO can be reset; installations without that baseline are turned away.
 #
 # The heavy lifting happens on the next boot via omarchy-system-factory-reset-finish, staged
 # here. On encrypted installs the LUKS volume is re-keyed to a throwaway
@@ -165,19 +164,20 @@ stage_luks_rekey() {
 }
 
 install_provisioning_units() {
-  local next="$1" unit_src="$2"
+  local next="$1"
+  local dinit_src="$next/usr/share/omarchy/install/artix/dinit"
+  [[ -f $dinit_src/omarchy-provision-owner && -f $dinit_src/omarchy-system-factory-reset-finish ]] ||
+    fail "the factory snapshot predates Omartix dinit provisioning support"
 
-  install -Dm644 "$unit_src/omarchy-provision-owner.service" \
-    "$next/etc/systemd/system/omarchy-provision-owner.service"
-  install -Dm644 "$unit_src/omarchy-system-factory-reset-finish.service" \
-    "$next/etc/systemd/system/omarchy-system-factory-reset-finish.service"
-
-  install -d "$next/etc/systemd/system/multi-user.target.wants" \
-    "$next/etc/systemd/system/sysinit.target.wants"
-  ln -sf /etc/systemd/system/omarchy-provision-owner.service \
-    "$next/etc/systemd/system/multi-user.target.wants/omarchy-provision-owner.service"
-  ln -sf /etc/systemd/system/omarchy-system-factory-reset-finish.service \
-    "$next/etc/systemd/system/sysinit.target.wants/omarchy-system-factory-reset-finish.service"
+  install -Dm644 "$dinit_src/omarchy-provision-owner" \
+    "$next/etc/dinit.d/omarchy-provision-owner"
+  install -Dm644 "$dinit_src/omarchy-system-factory-reset-finish" \
+    "$next/etc/dinit.d/omarchy-system-factory-reset-finish"
+  install -d "$next/etc/dinit.d/boot.d"
+  ln -sfn ../omarchy-provision-owner \
+    "$next/etc/dinit.d/boot.d/omarchy-provision-owner"
+  ln -sfn ../omarchy-system-factory-reset-finish \
+    "$next/etc/dinit.d/boot.d/omarchy-system-factory-reset-finish"
 }
 
 # Start the ESP's limine.conf over from the shipped template and drop the
@@ -341,12 +341,12 @@ stage_full_reset() {
   [[ -d $next ]] && btrfs subvolume delete --recursive "$next" >/dev/null
   btrfs subvolume snapshot "$top/@factory" "$next" >>"$LOG_FILE"
 
-  local unit_src="$next/usr/share/omarchy/install/provisioning"
-  [[ -f $unit_src/omarchy-provision-owner.service && -x $next/usr/bin/omarchy-provision-owner ]] ||
-    fail "the factory snapshot predates provisioning support; cannot reset from it"
+  [[ -f $next/usr/share/omarchy/install/artix/dinit/omarchy-provision-owner &&
+    -x $next/usr/bin/omarchy-provision-owner ]] ||
+    fail "the factory snapshot predates Omartix dinit provisioning support"
 
   log "Scrubbing machine identity from the factory system"
-  systemd-id128 new >"$next/etc/machine-id"
+  tr -d '-' </proc/sys/kernel/random/uuid >"$next/etc/machine-id"
   rm -f "$next"/etc/ssh/ssh_host_*
   rm -f "$next"/etc/NetworkManager/system-connections/*
   rm -rf "$next"/var/lib/NetworkManager/* "$next/var/lib/tailscale" "$next/var/lib/iwd"
@@ -377,7 +377,7 @@ stage_full_reset() {
   install -d -m 755 "$next$PROVISIONING_DIR"
   touch "$next$PROVISIONING_DIR/pending" "$next$PROVISIONING_DIR/wipe-pending"
 
-  install_provisioning_units "$next" "$unit_src"
+  install_provisioning_units "$next"
 
   if encrypted_install; then
     stage_luks_rekey "$next"
@@ -394,16 +394,16 @@ stage_full_reset() {
 }
 
 # A reset is a clone of @factory, so a machine without one has nothing to
-# return to. Only the Quattro installer takes that snapshot.
+# return to. Only the Omartix installer takes that snapshot.
 require_factory_snapshot() {
   [[ -d $TOP_MNT/@factory ]] && return 0
 
   echo
   gum style --bold --foreground 3 "This machine has no factory snapshot to reset to."
   echo
-  gum style "A reset restores the @factory snapshot the Omarchy Quattro installer takes"
-  gum style "right after installing. Machines upgraded to Quattro from an earlier version,"
-  gum style "or installed some other way, never got one, so there is no baseline here to"
+  gum style "A reset restores the @factory snapshot the Omartix installer takes"
+  gum style "right after installing. Machines installed some other way never got one,"
+  gum style "so there is no baseline here to"
   gum style "return to."
   echo
   gum style --foreground 8 "Reinstall from the Omarchy ISO to make this machine resettable."
@@ -430,11 +430,9 @@ main() {
 
   confirm_reset
 
-  # The running system's limine-snapper-sync must not rewrite the ESP's
-  # limine.conf behind the staged rebuild (subvolume changes below can
-  # trigger it). The runtime mask evaporates on the reboot that follows.
-  systemctl mask --runtime --now limine-snapper-sync.service >/dev/null 2>&1 || true
-  systemctl mask --runtime --now limine-snapper-sync.path >/dev/null 2>&1 || true
+  # Stop the running sync service before it can rewrite the ESP's limine.conf
+  # behind the staged rebuild.
+  dinitctl stop limine-snapper-sync >/dev/null 2>&1 || true
 
   stage_full_reset
 
@@ -443,7 +441,7 @@ main() {
   echo
   gum style --bold "Reset staged. The wipe finishes on the next boot."
   if gum confirm --affirmative "Reboot now" --negative "Reboot later" "Reboot to complete the reset?"; then
-    systemctl reboot
+    reboot
   else
     gum style --foreground 3 "Do not keep using this machine — changes made now will be lost."
   fi

@@ -2,17 +2,18 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 mkdir -p "$TMPDIR/bin"
-SYSTEMCTL_LOG="$TMPDIR/systemctl-log"
+DINIT_LOG="$TMPDIR/dinit-log"
 
-cat >"$TMPDIR/bin/systemctl" <<'SH'
+cat >"$TMPDIR/bin/dinitctl" <<'SH'
 #!/bin/bash
-printf '%s\n' "$*" >>"$SYSTEMCTL_LOG"
+printf '%s\n' "$*" >>"$DINIT_LOG"
 SH
 
 cat >"$TMPDIR/bin/omarchy-notification-send" <<'SH'
@@ -20,38 +21,40 @@ cat >"$TMPDIR/bin/omarchy-notification-send" <<'SH'
 exit 0
 SH
 
-chmod +x "$TMPDIR/bin/systemctl" "$TMPDIR/bin/omarchy-notification-send"
+chmod +x "$TMPDIR/bin/dinitctl" "$TMPDIR/bin/omarchy-notification-send"
 
 test_home="$TMPDIR/home"
 flag="$test_home/.local/state/omarchy/toggles/crash-capture-off"
 
 toggle_crash_capture() {
   PATH="$TMPDIR/bin:$ROOT/bin:$PATH" \
-  SYSTEMCTL_LOG="$SYSTEMCTL_LOG" \
+  DINIT_LOG="$DINIT_LOG" \
   HOME="$test_home" \
     "$ROOT/bin/omarchy-toggle-crash-capture"
 }
 
 toggle_crash_capture
 [[ -f $flag ]] || fail "crash capture toggle disables the watcher"
-grep -Fqx -- "--user stop omarchy-crash-watch.service" "$SYSTEMCTL_LOG" ||
+grep -Fqx -- "--user stop omarchy-crash-watch" "$DINIT_LOG" ||
   fail "crash capture toggle stops the running watcher, so disabling takes effect before the next login"
 pass "crash capture toggle disables the watcher"
 
-: >"$SYSTEMCTL_LOG"
+: >"$DINIT_LOG"
 toggle_crash_capture
 [[ ! -f $flag ]] || fail "crash capture toggle re-enables the watcher"
-grep -Fqx -- "--user start omarchy-crash-watch.service" "$SYSTEMCTL_LOG" ||
+grep -Fqx -- "--user start omarchy-crash-watch" "$DINIT_LOG" ||
   fail "crash capture toggle starts the watcher, so enabling takes effect before the next login"
 pass "crash capture toggle re-enables the watcher"
 
-service="$ROOT/default/systemd/user/omarchy-crash-watch.service"
-grep -Fx 'ConditionPathExists=!%h/.local/state/omarchy/toggles/crash-capture-off' "$service" >/dev/null ||
-  fail "the watcher is pulled back in at every login, so disabling it never survives a logout"
+session_init="$ROOT/bin/omarchy-session-init"
+grep -F 'crash-capture-off' "$session_init" >/dev/null ||
+  fail "the watcher is checked at every login, so disabling it survives a logout"
 pass "crash watcher stays disabled across logins"
 
-grep -F 'omarchy-crash-watch.service' "$ROOT/install/user/first-run/enable-user-units.sh" >/dev/null ||
+if [[ ! -f $ROOT/install/artix/dinit/user/omarchy-crash-watch ]] ||
+  ! grep -F 'start_service omarchy-crash-watch' "$ROOT/bin/omarchy-session-init" >/dev/null; then
   fail "crash capture is no longer on by default for new installs"
+fi
 pass "crash capture is on by default"
 
 require_command jq

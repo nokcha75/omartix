@@ -38,12 +38,21 @@ if [[ -e /dev/uinput ]]; then
 fi
 '
 
-systemctl --user reset-failed ydotool.service >/dev/null 2>&1 || true
-systemctl --user start ydotool.service
+user_dinit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dinit.d"
+install -d -m 0755 "$user_dinit_dir"
+cat >"$user_dinit_dir/ydotool" <<'EOF'
+type = process
+command = /usr/bin/ydotoold
+restart = true
+restart-delay = 2
+EOF
 
-if ! systemctl --user is-active --quiet ydotool.service; then
-  echo "omarchy-dev-install-ydoo: ydotool.service did not start" >&2
-  systemctl --user status ydotool.service --no-pager >&2 || true
+dinitctl --user stop ydotool >/dev/null 2>&1 || true
+dinitctl --user start ydotool
+
+if ! dinitctl --user is-started ydotool >/dev/null 2>&1; then
+  echo "omarchy-dev-install-ydoo: ydotool dinit service did not start" >&2
+  dinitctl --user status ydotool >&2 || true
   exit 1
 fi
 

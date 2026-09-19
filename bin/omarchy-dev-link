@@ -29,11 +29,11 @@ Usage: omarchy dev link <path-to-checkout> [--no-reboot]
 
 Writes /etc/omarchy.conf so OMARCHY_PATH resolves to <path-to-checkout>
 after reboot. This intentionally does not rewrite the running Hyprland,
-systemd, shell, or app-launcher environment; reboot to make every layer agree.
+dinit, shell, or app-launcher environment; reboot to make every layer agree.
 
 Affects only \$OMARCHY_PATH-resolved trees: bin/, default/, shell/,
 themes/, applications/, config/. Files installed at fixed system paths
-(/etc/, /usr/lib/systemd/, udev rule bodies, /etc/skel after user
+(/etc/, /etc/dinit.d/, udev rule bodies, /etc/skel after user
 creation) are NOT covered — for those, use omarchy-dev-pkg-test to build
 and install the package from the checkout.
 

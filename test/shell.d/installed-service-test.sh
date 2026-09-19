@@ -43,11 +43,11 @@ set -euo pipefail
 [[ ${OMARCHY_TEST_TAILSCALE_STATUS:-0} == "1" && ${1:-} == "status" && ${2:-} == "--json" ]]
 SH
 
-cat >"$mock_bin/systemctl" <<'SH'
+cat >"$mock_bin/dinitctl" <<'SH'
 #!/bin/bash
 set -euo pipefail
 
-[[ ${OMARCHY_TEST_TAILSCALE_SYSTEMD:-0} == "1" ]]
+[[ ${OMARCHY_TEST_TAILSCALE_DINIT:-0} == "1" && ${1:-} == "is-started" && ${2:-} == "tailscaled" ]]
 SH
 
 cat >"$mock_bin/pgrep" <<'SH'
@@ -89,8 +89,8 @@ pass "installed Dropbox service check rejects unavailable service"
 PATH="$mock_path" OMARCHY_TEST_TAILSCALE_CLI=1 OMARCHY_TEST_TAILSCALE_STATUS=1 omarchy-installed-service-tailscale
 pass "installed Tailscale service check accepts status JSON"
 
-PATH="$mock_path" OMARCHY_TEST_TAILSCALE_SYSTEMD=1 omarchy-installed-service-tailscale
-pass "installed Tailscale service check accepts active systemd service"
+PATH="$mock_path" OMARCHY_TEST_TAILSCALE_DINIT=1 omarchy-installed-service-tailscale
+pass "installed Tailscale service check accepts active dinit service"
 
 PATH="$mock_path" OMARCHY_TEST_TAILSCALE_PROCESS=1 omarchy-installed-service-tailscale
 pass "installed Tailscale service check accepts running daemon"

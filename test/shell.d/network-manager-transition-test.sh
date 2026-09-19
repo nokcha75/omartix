@@ -6,6 +6,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 dns="$ROOT/bin/omarchy-dns"
 hardware_network="$ROOT/install/hardware/network.sh"
+migration="$ROOT/migrations/1782002156.sh"
 
 ! grep -F 'systemd-networkd' "$dns" >/dev/null || fail "omarchy-dns no longer restarts systemd-networkd"
 grep -F 'NetworkManager/conf.d/20-omarchy-dns.conf' "$dns" >/dev/null
@@ -20,8 +21,10 @@ if grep -F 'nmcli general reload conf,dns-full' "$dns" >/dev/null; then
 fi
 pass "omarchy-dns configures DNS through NetworkManager"
 
-grep -F 'systemd-networkd.service' "$hardware_network" >/dev/null
-grep -F 'systemd-networkd.socket' "$hardware_network" >/dev/null
-grep -F '20-wlan.network' "$hardware_network" >/dev/null
-grep -F 'omarchy-networkd-retired' "$hardware_network" >/dev/null
-pass "hardware setup retires archinstall networkd state"
+grep -F 'NetworkManager is the sole network manager on Omartix' "$hardware_network" >/dev/null
+grep -F 'networkmanager-dinit' "$migration" >/dev/null
+grep -F 'dinitctl enable NetworkManager' "$migration" >/dev/null
+if rg -n '\bsystemctl\b|/etc/systemd' "$hardware_network" "$migration" >/dev/null; then
+  fail "hardware setup has no systemd network-manager transition"
+fi
+pass "hardware setup keeps NetworkManager under dinit"

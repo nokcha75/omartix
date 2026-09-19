@@ -59,8 +59,9 @@ fi
 
 setup_sshd() {
   echo "Installing and starting the OpenSSH server..."
-  omarchy-pkg-add openssh
-  sudo systemctl enable --now sshd.service
+  omarchy-pkg-add openssh openssh-dinit
+  sudo dinitctl enable sshd
+  sudo dinitctl start sshd
 }
 
 open_firewall() {
@@ -182,9 +183,8 @@ CONF
     return 1
   fi
 
-  # Reload rather than restart so an administrator already connected keeps
-  # their session.
-  sudo systemctl reload sshd.service
+  # dinit has no reload verb; restart only after the configuration validates.
+  sudo dinitctl restart sshd
 }
 
 echo -e "\e[32mSetting up SSH server access with key-based authentication.\n\e[0m"

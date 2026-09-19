@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# omarchy:summary=Run daily Snapper number cleanup under dinit
+# omarchy:hidden=true
+
+set -u
+
+((EUID == 0)) || exit 1
+
+while true; do
+  if ! snapper --no-dbus -c root cleanup number >/dev/null 2>&1; then
+    logger -t omarchy-snapper "Snapper cleanup failed; retrying on the next daily run."
+  fi
+  sleep 86400
+done

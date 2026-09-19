@@ -1,0 +1,60 @@
+# Artix+dinit rebuild of the Limine mkinitcpio integration used by Omartix.
+#
+# This remains an ISO-owned package until an Artix-native equivalent exists.
+# Keeping its recipe here makes a fresh Omartix clone self-contained;
+# the core Omartix package is built from the supplied Omartix checkout.
+
+_upstream_pkgname='limine-entry-tool'
+pkgname='omarchy-artix-limine-mkinitcpio-hook'
+_pkgver='1.38.0'
+pkgver="${_pkgver}"
+pkgrel=1
+pkgdesc='Artix-compatible Limine mkinitcpio integration for Omartix'
+arch=('x86_64')
+url='https://gitlab.com/Zesko/limine-entry-tool'
+license=('GPL3')
+provides=('limine-entry-tool' 'limine-mkinitcpio-hook')
+conflicts=('limine-entry-tool' 'limine-mkinitcpio-hook')
+depends=('bash' 'grep' 'tar' 'limine' 'mkinitcpio' 'efibootmgr')
+makedepends=('gcc' 'git' 'gradle' 'zlib')
+source=(
+  "${_upstream_pkgname}::git+${url}.git#tag=${_pkgver}"
+  'https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.2.4/graalvm-community-jdk-25i2-25.0.4_linux-x64_bin.tar.gz'
+)
+sha256sums=('11dd8211898585f79d8361d97606965bb2ca214dccace5b133dc5121e4bb4d01'
+            '3f4a89de8eaa96f2ed677f09957c7e872cd8467aad3537f8b5394c1b8c4b942e')
+
+prepare() {
+  rm -rf graalvm_ce_jdk25
+  mv graalvm-community-*/ graalvm_ce_jdk25
+
+  local hook="${srcdir}/${_upstream_pkgname}/install/arch-linux/limine-mkinitcpio-hook/etc/pacman.d/hooks/90-mkinitcpio-install.hook"
+  # Retain kernel/mkinitcpio triggers, but do not depend on systemd.
+  sed -i '/^Target = usr\/lib\/systemd\/systemd$/d' "$hook"
+}
+
+build() {
+  cd "${srcdir}/${_upstream_pkgname}"
+  export GRAALVM_HOME="${srcdir}/graalvm_ce_jdk25"
+  export JAVA_HOME="$GRAALVM_HOME"
+  export PATH="/usr/bin:/bin:$PATH"
+  export CC=/usr/bin/gcc
+  export CXX=/usr/bin/g++
+  export NATIVE_IMAGE_OPTIONS='-march=compatibility --future-defaults=all'
+  gradle clean nativeCompile -Dorg.gradle.java.home="$JAVA_HOME"
+}
+
+package() {
+  cd "${srcdir}/${_upstream_pkgname}"
+  local src='install/arch-linux'
+
+  install -dm 755 "$pkgdir/usr/share/doc/limine-entry-tool" \
+    "$pkgdir/etc/boot/hooks/pre.d" "$pkgdir/etc/boot/hooks/post.d" \
+    "$pkgdir/usr/lib/limine"
+  install -Dm644 README.md CHANGELOG.md -t "$pkgdir/usr/share/doc/limine-entry-tool/"
+  cp -a "$src/limine-entry-tool/etc" "$src/limine-entry-tool/usr" "$pkgdir/"
+  cp -a "$src/limine-mkinitcpio-hook/etc" "$src/limine-mkinitcpio-hook/usr" "$pkgdir/"
+  install -Dm755 build/native/nativeCompile/limine-entry-tool "$pkgdir/usr/lib/limine/"
+  ln -sf /usr/bin/limine-reset-enroll "$pkgdir/etc/boot/hooks/pre.d/10-limine-reset-enroll"
+  ln -sf /usr/bin/limine-enroll-config "$pkgdir/etc/boot/hooks/post.d/90-limine-enroll-config"
+}

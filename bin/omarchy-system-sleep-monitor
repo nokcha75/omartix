@@ -53,7 +53,7 @@ esac
 
 sleep_monitor="$OMARCHY_PATH/bin/omarchy-system-sleep-monitor"
 
-exec systemd-inhibit \
+exec elogind-inhibit \
   --what=sleep \
   --mode=delay \
   --who=Omarchy \

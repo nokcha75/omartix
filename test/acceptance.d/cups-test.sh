@@ -13,9 +13,7 @@ pass "printing packages are installed"
 pass "the root CUPS-PDF backend is absent"
 
 ! pacman -Q cups-browsed >/dev/null 2>&1 || fail "automatic printer discovery is absent"
-! systemctl is-enabled --quiet cups-browsed.service 2>/dev/null ||
-  fail "automatic printer discovery is not enabled"
-! systemctl is-active --quiet cups-browsed.service 2>/dev/null ||
+! dinitctl is-started cups-browsed >/dev/null 2>&1 ||
   fail "automatic printer discovery is not running"
 ! pgrep -x cups-browsed >/dev/null 2>&1 || fail "no cups-browsed process exists"
 pass "automatic printer discovery is not installed or running"
@@ -33,8 +31,8 @@ for path in \
 done
 pass "automatic printer discovery leaves no package files"
 
-systemctl is-enabled --quiet cups.service || fail "CUPS is enabled"
-systemctl is-active --quiet cups.service || fail "CUPS is running"
+[[ -L /etc/dinit.d/boot.d/cups ]] || fail "CUPS is enabled"
+dinitctl is-started cups >/dev/null || fail "CUPS is running"
 timeout 10 lpstat -r >/dev/null 2>&1 || fail "the CUPS scheduler answers"
 pass "CUPS is enabled, running, and answering"
 

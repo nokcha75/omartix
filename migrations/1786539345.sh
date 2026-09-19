@@ -1,3 +1,5 @@
+#!/bin/bash
+
 echo "Announce process crashes and offer an AI diagnosis"
 
 # Both halves are set up in paths that only run once -- omarchy-provision-user
@@ -13,19 +15,23 @@ if [[ -d $skills_source/diagnose-crash ]]; then
   done
 fi
 
-systemctl --user daemon-reload >/dev/null 2>&1 || true
+user_config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+source_service="$OMARCHY_PATH/install/artix/dinit/user/omarchy-crash-watch"
+service="$user_config_home/dinit.d/omarchy-crash-watch"
+legacy_wants="$user_config_home/systemd/user/graphical-session.target.wants/omarchy-crash-watch.service"
+disabled_flag="$HOME/.local/state/omarchy/toggles/crash-capture-off"
 
-# `systemctl enable` needs a live user manager, which an update from a TTY does
-# not have, so fall back to writing the symlink it would have written.
-if ! systemctl --user enable omarchy-crash-watch.service >/dev/null 2>&1; then
-  wants_dir="$HOME/.config/systemd/user/graphical-session.target.wants"
-  mkdir -p "$wants_dir"
-  ln -sfn /usr/lib/systemd/user/omarchy-crash-watch.service \
-    "$wants_dir/omarchy-crash-watch.service"
+if [[ ! -f $source_service ]]; then
+  echo "Omartix dinit service definition is missing: $source_service" >&2
+  exit 1
 fi
 
-# Nothing to start into over SSH; the next graphical login handles it. A failed
-# start only delays crash toasts, so it stays quiet.
-if systemctl --user is-active --quiet graphical-session.target; then
-  systemctl --user start omarchy-crash-watch.service >/dev/null 2>&1 || true
+install -Dm644 "$source_service" "$service"
+rm -f -- "$legacy_wants"
+
+# Nothing should start into over SSH or a TTY; the next graphical login runs
+# omarchy-session-init. Respect a user's crash-capture opt-out during a live
+# handover as well, so migrations never turn the feature back on.
+if [[ ! -e $disabled_flag && -n ${WAYLAND_DISPLAY:-} ]] && dinitctl --user list >/dev/null 2>&1; then
+  dinitctl --user start omarchy-crash-watch >/dev/null 2>&1 || true
 fi

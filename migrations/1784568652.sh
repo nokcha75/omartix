@@ -1,15 +1,9 @@
-echo "Stop waiting for the network before showing the desktop"
+#!/bin/bash
 
-as_root() {
-  if (( EUID == 0 )); then
-    "$@"
-  else
-    sudo "$@"
-  fi
-}
+echo "Keep the desktop independent of network connection timing"
 
-# graphical.target was gated on network-online.target (cups-browsed orders
-# itself after it), so the desktop waited for DHCP/Wi-Fi association at boot.
-# Nothing in the session needs to block on the network; mask the wait so
-# network-online no longer delays boot. Mirrors the systemd-networkd variant.
-as_root systemctl mask NetworkManager-wait-online.service >/dev/null 2>&1 || true
+# systemd's NetworkManager-wait-online.service could pull network-online into
+# graphical boot and delay the desktop until DHCP or Wi-Fi association finished.
+# Artix dinit has no NetworkManager-specific wait service; its generic
+# network-online.target only runs when an enabled service explicitly depends on
+# it. Omartix enables none, so the desired no-wait behavior is already native.

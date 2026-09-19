@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1091
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 for command in git jq python3; do require_command "$command"; done
@@ -33,14 +34,14 @@ def _write_desktop_build_stamp(project_root, *, source_mode):
         log.write('build-stamp\n')
 PY
 git -C "$test_tmp/seed" add .
-git -C "$test_tmp/seed" -c user.name=Test -c user.email=test@example.invalid commit -qm fixture
+git -C "$test_tmp/seed" -c commit.gpgSign=false -c user.name=Test -c user.email=test@example.invalid commit -qm fixture
 release_commit=$(git -C "$test_tmp/seed" rev-parse HEAD)
 printf 'after\n' >"$test_tmp/seed/runtime.txt"
 git -C "$test_tmp/seed" diff >"$test_tmp/share/runtime.patch"
 printf 'before\n' >"$test_tmp/seed/runtime.txt"
 printf 'newer desktop source\n' >"$test_tmp/seed/apps/desktop/src/main.js"
 git -C "$test_tmp/seed" add apps/desktop/src/main.js
-git -C "$test_tmp/seed" -c user.name=Test -c user.email=test@example.invalid commit -qm newer-main
+git -C "$test_tmp/seed" -c commit.gpgSign=false -c user.name=Test -c user.email=test@example.invalid commit -qm newer-main
 origin_commit=$(git -C "$test_tmp/seed" rev-parse HEAD)
 export OMARCHY_TEST_RELEASE_COMMIT="$release_commit"
 printf '{"branch":"main","commit":"%s"}\n' "$release_commit" >"$test_tmp/package/resources/install-stamp.json"
@@ -126,7 +127,7 @@ if [[ ${OMARCHY_TEST_COPY_RACE:-0} == 1 && $1 == -T ]]; then
 fi
 exec /usr/bin/mv "$@"
 MOCK
-cat >"$test_tmp/bin/uwsm-app" <<'MOCK'
+cat >"$test_tmp/bin/omartix-app" <<'MOCK'
 #!/bin/bash
 [[ $1 == -- ]] || exit 1
 shift
@@ -142,11 +143,7 @@ else
   printf 'launch-before-copy\n' >>"$OMARCHY_TEST_ROOT/events"
 fi
 MOCK
-cat >"$test_tmp/bin/systemctl" <<'MOCK'
-#!/bin/bash
-printf 'theme-stop\n' >>"$OMARCHY_TEST_ROOT/events"
-MOCK
-cat >"$test_tmp/bin/systemd-run" <<'MOCK'
+cat >"$test_tmp/bin/omarchy-theme-set-hermes" <<'MOCK'
 #!/bin/bash
 printf 'theme-start\n' >>"$OMARCHY_TEST_ROOT/events"
 # Join the mock asynchronous launch so every test owns its full lifetime.
@@ -226,7 +223,7 @@ pass "repeat setup accepts the applied patch and preserves the existing native a
 # Advancing the runtime must never reinstall the release or reapply its patch.
 printf 'new main\n' >"$runtime/runtime.txt"
 git -C "$runtime" add runtime.txt
-git -C "$runtime" -c user.name=Test -c user.email=test@example.invalid commit -qm update
+git -C "$runtime" -c commit.gpgSign=false -c user.name=Test -c user.email=test@example.invalid commit -qm update
 : >"$test_tmp/events"
 run_installer || fail "a complete updated runtime and native app are reused"
 [[ $(cat "$runtime/runtime.txt") == 'new main' ]] || fail "updated runtime is not release-patched"
@@ -309,7 +306,7 @@ new_home local-main
 git clone -q "$test_tmp/seed" "$runtime"
 printf 'local branch work\n' >"$runtime/keep"
 git -C "$runtime" add keep
-git -C "$runtime" -c user.name=Test -c user.email=test@example.invalid commit -qm local-work
+git -C "$runtime" -c commit.gpgSign=false -c user.name=Test -c user.email=test@example.invalid commit -qm local-work
 local_main=$(git -C "$runtime" rev-parse main)
 git -C "$runtime" checkout -q --detach "$release_commit"
 run_installer && fail "local main commits cannot be reset by upstream installation"
@@ -363,7 +360,7 @@ pass "custom profile paths normalize to the shared Hermes home"
 git -C "$test_tmp/seed" mv hermes_cli/main.py hermes_cli/main_desktop.py
 printf 'raise AssertionError("legacy module imported after desktop split")\n' >"$test_tmp/seed/hermes_cli/main.py"
 git -C "$test_tmp/seed" add hermes_cli/main.py
-git -C "$test_tmp/seed" -c user.name=Test -c user.email=test@example.invalid commit -qm split-desktop
+git -C "$test_tmp/seed" -c commit.gpgSign=false -c user.name=Test -c user.email=test@example.invalid commit -qm split-desktop
 release_commit=$(git -C "$test_tmp/seed" rev-parse HEAD)
 export OMARCHY_TEST_RELEASE_COMMIT="$release_commit"
 printf '{"branch":"main","commit":"%s"}\n' "$release_commit" >"$test_tmp/package/resources/install-stamp.json"

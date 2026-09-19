@@ -27,9 +27,9 @@ allowed = {
   # Symlinks into another package's icon theme; owning them would mean owning
   # paths inside Yaru.
   "/usr/share/icons/Yaru/scalable/actions",
-  # Hardware-conditional sleep hooks, installed only on the machines that need
-  # them so the hook does not exist where it does not apply.
-  "/usr/lib/systemd/system-sleep",
+  # Hardware-conditional elogind sleep hooks, installed only on the machines
+  # that need them so the hook does not exist where it does not apply.
+  "/usr/lib/elogind/system-sleep",
   # Written through a variable, so the scan below cannot see them at the point
   # they are written. These drop configuration into another project's tree
   # rather than Omarchy's and are not candidates for omarchy-settings.
@@ -46,7 +46,8 @@ allowed = {
 }
 
 # One-time 3.x upgrade. It runs before this rule existed and cannot be made to
-# retroactively matter for machines that already ran it.
+# retroactively matter for machines that already ran it. Omartix replaces it
+# with a stub, but skip it anyway so a future restoration cannot fail this net.
 skip_scripts = {"bin/omarchy-upgrade-to-quattro"}
 
 pkgs_candidates = [
@@ -136,20 +137,19 @@ PYTHON
 
 pass "no Omarchy script writes a path under /usr that no package owns"
 
-for script in bin/omarchy-hibernation-setup bin/omarchy-toggle-hybrid-gpu; do
-  grep -F '"${destination%/*}/.${destination##*/}.omarchy.XXXXXX"' "$ROOT/$script" >/dev/null ||
-    fail "$script reserves a hidden sibling for the privileged replacement"
-  grep -F 'sudo /usr/bin/install -m "$mode" -o root -g root -T "$source" "$stage"' "$ROOT/$script" >/dev/null ||
-    fail "$script prepares privileged files with final root ownership and mode"
-  grep -F 'sudo /usr/bin/mv -Tf -- "$stage" "$destination"' "$ROOT/$script" >/dev/null ||
-    fail "$script atomically replaces the privileged destination"
-  if grep -F 'sudo /usr/bin/chmod "$mode" "$destination"' "$ROOT/$script" >/dev/null; then
-    fail "$script changes mode after publishing the privileged destination"
-  fi
-done
+script=bin/omarchy-hibernation-setup
+grep -F '"${destination%/*}/.${destination##*/}.omarchy.XXXXXX"' "$ROOT/$script" >/dev/null ||
+  fail "$script reserves a hidden sibling for the privileged replacement"
+grep -F 'sudo /usr/bin/install -m "$mode" -o root -g root -T "$source" "$stage"' "$ROOT/$script" >/dev/null ||
+  fail "$script prepares privileged files with final root ownership and mode"
+grep -F 'sudo /usr/bin/mv -Tf -- "$stage" "$destination"' "$ROOT/$script" >/dev/null ||
+  fail "$script atomically replaces the privileged destination"
+if grep -F 'sudo /usr/bin/chmod "$mode" "$destination"' "$ROOT/$script" >/dev/null; then
+  fail "$script changes mode after publishing the privileged destination"
+fi
 
-grep -F '  /usr/lib/systemd/system-sleep/keyboard-backlight 0755' "$ROOT/bin/omarchy-hibernation-setup" >/dev/null ||
-  fail "hibernation setup installs keyboard-backlight as a root-owned executable"
+grep -F '  /usr/lib/elogind/system-sleep/keyboard-backlight 0755' "$ROOT/bin/omarchy-hibernation-setup" >/dev/null ||
+  fail "hibernation setup installs the elogind keyboard-backlight hook as a root-owned executable"
 
 hook_install_line=$(rg -n '^if ! install_root_file .*keyboard-backlight' "$ROOT/bin/omarchy-hibernation-setup" | cut -d: -f1)
 resume_marker_line=$(rg -n '^echo "HOOKS\+=\(resume\)"' "$ROOT/bin/omarchy-hibernation-setup" | cut -d: -f1)
@@ -158,24 +158,8 @@ resume_marker_line=$(rg -n '^echo "HOOKS\+=\(resume\)"' "$ROOT/bin/omarchy-hiber
 (( hook_install_line < resume_marker_line )) ||
   fail "hibernation setup marks completion before a failed hook install can be retried"
 
-grep -F '  /usr/lib/systemd/system-sleep/force-igpu 0755' "$ROOT/bin/omarchy-toggle-hybrid-gpu" >/dev/null ||
-  fail "hybrid GPU setup installs force-igpu as a root-owned executable"
-grep -F '  /etc/systemd/system/supergfxd.service.d/delay-start.conf 0644' "$ROOT/bin/omarchy-toggle-hybrid-gpu" >/dev/null ||
-  fail "hybrid GPU setup installs its root service drop-in as root-owned configuration"
-
-delay_install_line=$(rg -n '^    if ! install_root_file .*delay-start\.conf' "$ROOT/bin/omarchy-toggle-hybrid-gpu" | cut -d: -f1)
-force_install_line=$(rg -n '^    if ! install_root_file .*force-igpu' "$ROOT/bin/omarchy-toggle-hybrid-gpu" | cut -d: -f1)
-config_switch_line=$(rg -n '^    sudo sed -i \\' "$ROOT/bin/omarchy-toggle-hybrid-gpu" | tail -1 | cut -d: -f1)
-[[ -n $delay_install_line && -n $force_install_line && -n $config_switch_line ]] ||
-  fail "hybrid GPU setup keeps recognizable support-file and config-switch steps"
-(( delay_install_line < config_switch_line && force_install_line < config_switch_line )) ||
-  fail "hybrid GPU setup switches config before every required file is installed"
-
-grep -Fq '/usr/bin/grep -Eq' "$ROOT/default/systemd/system-sleep/force-igpu" ||
-  fail "force-igpu does not guard execution with the configured GPU mode"
-
-if rg -n 'cp -p.*(system-sleep|supergfxd\.service\.d)' "$ROOT/bin/omarchy-hibernation-setup" "$ROOT/bin/omarchy-toggle-hybrid-gpu"; then
-  fail "privileged sleep and hybrid GPU files are never copied with source ownership"
+if rg -n 'cp -p.*system-sleep' "$ROOT/bin/omarchy-hibernation-setup"; then
+  fail "privileged sleep hooks are never copied with source ownership"
 fi
 
-pass "system-sleep hooks and the hybrid GPU drop-in enforce root ownership"
+pass "system-sleep hooks enforce root ownership"

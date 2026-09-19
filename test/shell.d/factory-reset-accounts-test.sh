@@ -72,10 +72,10 @@ make_fixture() {
   local top="$1" root_hash="${2:-original-root-hash}"
   local factory="$top/@factory"
   mkdir -p "$top/@" "$factory/etc" "$factory/home/seller" \
-    "$factory/usr/bin" "$factory/usr/share/omarchy/install/provisioning" \
+    "$factory/usr/bin" "$factory/usr/share/omarchy/install/artix/dinit" \
     "$factory/var/lib/omarchy/provisioning/packages"
   touch "$top/@/old-system" "$factory/home/seller/private-file" \
-    "$factory/usr/share/omarchy/install/provisioning/omarchy-provision-owner.service" \
+    "$factory/usr/share/omarchy/install/artix/dinit/omarchy-provision-owner" \
     "$factory/var/lib/omarchy/provisioning/packages/node-v0.tar.gz"
   printf '#!/bin/bash\n' >"$factory/usr/bin/omarchy-provision-owner"
   chmod +x "$factory/usr/bin/omarchy-provision-owner"

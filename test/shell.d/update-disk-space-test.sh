@@ -66,7 +66,7 @@ for command in \
   omarchy-cmd-present \
   omarchy-toggle-idle \
   pkexec \
-  systemd-inhibit \
+  elogind-inhibit \
   omarchy-update-dev \
   omarchy-update-pkg-prune \
   omarchy-update-keyring \

@@ -34,7 +34,7 @@ SH
 for command in \
   omarchy-toggle-idle \
   pkexec \
-  systemd-inhibit \
+  elogind-inhibit \
   omarchy-update-pkg-prune \
   omarchy-update-dev \
   omarchy-update-keyring \
@@ -85,7 +85,7 @@ pass "omarchy-update prevents overlapping top-level updates"
 inhibit_pid_file="$test_tmp/inhibit-pid"
 keyring_marker="$test_tmp/keyring-started"
 write_stub omarchy-snapshot 'exit 0'
-write_stub systemd-inhibit 'echo "$$" >"$INHIBIT_PID_FILE"; exec sleep 30'
+write_stub elogind-inhibit 'printf "%s\n" "$*" >>"${ELOGIND_LOG:-/dev/null}"; echo "$$" >"$INHIBIT_PID_FILE"; exec sleep 30'
 write_stub omarchy-update-keyring 'echo started >"$TEST_MARKER"; sleep 3; exit 0'
 
 OMARCHY_UPDATE_LOGGED=1 TEST_MARKER="$keyring_marker" INHIBIT_PID_FILE="$inhibit_pid_file" \
@@ -120,6 +120,7 @@ pass "omarchy-update waits for its sleep inhibitor to stop"
 if (( EUID != 0 )); then
   sudo_log="$test_tmp/sudo.log"
   pkexec_marker="$test_tmp/pkexec-used"
+  elogind_log="$test_tmp/elogind.log"
   terminal_inhibit_pid_file="$test_tmp/terminal-inhibit-pid"
   write_stub sudo '
 printf "%s\n" "$*" >>"$SUDO_LOG"
@@ -129,28 +130,27 @@ fi
 exec "$@"'
   write_stub pkexec 'touch "$PKEXEC_MARKER"; exec "$@"'
 
-  # start leaves the inhibitor running on purpose, but script tears the pty down
-  # the moment its command returns, which SIGHUPs that inhibitor before it can
-  # exec. Keep the session open from the inside until the stub has logged.
+  # Keep the terminal session open until the detached inhibitor has recorded
+  # its direct elogind invocation.
   terminal_driver="$test_tmp/terminal-stay-awake"
   cat >"$terminal_driver" <<'SH'
 #!/bin/bash
 omarchy-update-stay-awake start
 for _ in {1..200}; do
-  grep -q '^systemd-inhibit ' "$SUDO_LOG" && break
+  grep -q '^--what=sleep:idle ' "$ELOGIND_LOG" && break
   sleep 0.05
 done
 SH
   chmod +x "$terminal_driver"
 
-  SUDO_LOG="$sudo_log" PKEXEC_MARKER="$pkexec_marker" INHIBIT_PID_FILE="$terminal_inhibit_pid_file" \
+  SUDO_LOG="$sudo_log" PKEXEC_MARKER="$pkexec_marker" ELOGIND_LOG="$elogind_log" INHIBIT_PID_FILE="$terminal_inhibit_pid_file" \
     run_with_lock_env script -qefc "$terminal_driver" /dev/null >/dev/null
 
-  grep -qx -- '-v' "$sudo_log" || fail "terminal sleep inhibition validates sudo in the foreground"
-  grep -q '^systemd-inhibit ' "$sudo_log" || fail "terminal sleep inhibition runs through sudo"
+  grep -q '^--what=sleep:idle ' "$elogind_log" || fail "terminal sleep inhibition uses elogind directly"
+  [[ ! -s $sudo_log ]] || fail "terminal sleep inhibition does not require sudo"
   [[ ! -e $pkexec_marker ]] || fail "terminal sleep inhibition does not use pkexec"
   run_with_lock_env "$ROOT/bin/omarchy-update-stay-awake" stop
-  pass "terminal updates use sudo instead of Polkit for sleep inhibition"
+  pass "terminal updates use elogind directly for sleep inhibition"
 fi
 
 # Update-owned Stay Awake state must be cleared before the restart helper can

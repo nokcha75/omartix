@@ -9,27 +9,29 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 mkdir -p "$tmp_dir/bin" "$tmp_dir/home"
 export TEST_LOG="$tmp_dir/log"
-export PATH="$tmp_dir/bin:$PATH"
+export PATH="$tmp_dir/bin:$ROOT/bin:$PATH"
 export HOME="$tmp_dir/home"
 export OMARCHY_OPENCLAW_ONBOARD_SETTLE_SECONDS=0
-unit="$HOME/.config/systemd/user/openclaw-gateway.service"
+unit="$HOME/.config/dinit.d/openclaw-gateway"
 export unit
 
-# systemd and ss stand in for themselves. Once the wizard has written the unit
-# it is running as pid 4242, and that same process holds the gateway port
+# dinit and ss stand in for themselves. Once the gateway service exists it is
+# running as pid 4242, and that same process holds the gateway port
 # unless a test plants a different listener (an orphan) in $listener_file.
 listener_file="$tmp_dir/listener"
 export listener_file
-cat >"$tmp_dir/bin/systemctl" <<'SCRIPT'
+cat >"$tmp_dir/bin/dinitctl" <<'SCRIPT'
 #!/bin/bash
-printf 'systemctl:%s\n' "$*" >>"$TEST_LOG"
-if [[ $* == *MainPID* ]]; then
+printf 'dinitctl:%s\n' "$*" >>"$TEST_LOG"
+if [[ $* == *list* ]]; then
+  exit 0
+elif [[ $* == *status* ]]; then
   [[ -f $unit ]] && echo 4242 || echo 0
+  [[ -f $unit ]] && echo '    Process ID: 4242'
   exit 0
 fi
-[[ $* == *is-active* ]] && [[ -f $unit ]]
 SCRIPT
-chmod +x "$tmp_dir/bin/systemctl"
+chmod +x "$tmp_dir/bin/dinitctl"
 cat >"$tmp_dir/bin/ss" <<'SCRIPT'
 #!/bin/bash
 pid=
@@ -66,9 +68,13 @@ rc=0
 "$ROOT/bin/omarchy-openclaw-onboard" </dev/null >/dev/null 2>&1 || rc=$?
 elapsed=$((SECONDS - start))
 
-grep -q '^openclaw:onboard --flow quickstart --install-daemon --skip-ui$' "$TEST_LOG" ||
-  fail "onboarding runs the classic quickstart wizard with the service install" "$(grep '^openclaw:onboard' "$TEST_LOG" || true)"
-pass "onboarding runs the classic quickstart wizard with the service install"
+grep -q '^openclaw:onboard --flow quickstart --skip-ui$' "$TEST_LOG" ||
+  fail "onboarding runs the quickstart wizard without systemd daemon installation" "$(grep '^openclaw:onboard' "$TEST_LOG" || true)"
+! grep -q -- '--install-daemon' "$TEST_LOG" ||
+  fail "onboarding runs the quickstart wizard without systemd daemon installation"
+grep -q '^dinitctl:--user start openclaw-gateway$' "$TEST_LOG" ||
+  fail "onboarding starts the Gateway through dinit" "$(cat "$TEST_LOG")"
+pass "onboarding uses the no-daemon wizard and starts the Gateway through dinit"
 
 [[ $rc == 0 ]] || fail "a wizard that lingers after the gateway is up is stopped and counts as success" "rc=$rc"
 grep -q '^terminated$' "$TEST_LOG" ||
@@ -282,7 +288,7 @@ rc=0
 "$ROOT/bin/omarchy-openclaw-onboard" </dev/null >/dev/null 2>&1 || rc=$?
 [[ $rc == 1 ]] || fail "an orphan holding the port is not mistaken for the active unit" "rc=$rc"
 grep -q '^terminated$' "$TEST_LOG" || fail "an orphan holding the port is not mistaken for the active unit" "wizard left running"
-grep -q '^systemctl:--user show -p MainPID --value openclaw-gateway.service$' "$TEST_LOG" ||
-  fail "an orphan holding the port is not mistaken for the active unit" "unit ownership never checked"
+grep -q '^dinitctl:--user status openclaw-gateway$' "$TEST_LOG" ||
+  fail "an orphan holding the port is not mistaken for the active service" "dinit ownership never checked"
 pass "an orphan holding the port is not mistaken for the active unit"
 rm -f "$listener_file"

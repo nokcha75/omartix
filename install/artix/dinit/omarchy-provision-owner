@@ -1,0 +1,7 @@
+# First-boot owner setup for a deferred Omartix installation.
+type = process
+command = /usr/bin/openvt -c 1 -s -w -- /usr/bin/omarchy-provision-owner
+depends-on = dbus
+before = sddm
+restart = false
+log-type = buffer

@@ -1,0 +1,10 @@
+# Generic Omarchy applications supplied by Arch's official extra repository
+# through Artix's supported archlinux compatibility layer. Keep this list
+# limited to applications that have no systemd service, driver, or core-library
+# role in Omartix.
+dua-cli
+lazydocker
+moonlight-qt
+nautilus-python
+obsidian
+pinta

@@ -99,8 +99,3 @@ fi
 run_migration
 (( $(wc -l < "$FONT_TEST_CACHE_LOG") == 2 )) || fail "retry refreshes the cache after the file was removed"
 pass "retry a failed cache refresh after successful font retirement"
-
-if grep -q $'^retire\tomarchy.ttf\t' "$ROOT/bin/omarchy-upgrade-to-quattro"; then
-  fail "upgrader no longer treats the user font as a config file"
-fi
-pass "upgrader leaves font retirement to its post-upgrade migrations"

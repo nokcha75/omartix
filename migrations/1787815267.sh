@@ -1,3 +1,7 @@
+#!/bin/bash
+
+set -euo pipefail
+
 echo "Separate printer discovery from root and print-filter access"
 
 machine_marker="${OMARCHY_CUPS_MIGRATION_MARKER:-/var/lib/omarchy/migrations/1787815267}"
@@ -17,7 +21,7 @@ if omarchy-pkg-present cups; then
 
     if [[ ! $cups_browsed_uid =~ ^[0-9]+$ || ! $cups_browsed_group_gid =~ ^[0-9]+$ ]] ||
       ((cups_browsed_uid <= 0 || cups_browsed_uid >= 1000)) ||
-      [[ $cups_browsed_gid != $cups_browsed_group_gid ]] ||
+      [[ $cups_browsed_gid != "$cups_browsed_group_gid" ]] ||
       [[ $cups_browsed_description != "CUPS printer discovery" || $cups_browsed_home != "/" || $cups_browsed_shell != "/usr/bin/nologin" ]] ||
       [[ -n $cups_browsed_group_members || -n $other_primary_user ]]; then
       echo "Cannot harden printer discovery: the existing cups-browsed user or group is not a dedicated system account." >&2
@@ -36,22 +40,13 @@ if omarchy-pkg-present cups; then
   omarchy-pkg-add cups-pk-helper
 fi
 
-# Stop the root-running daemon before changing the authorization it relies on.
-if systemctl is-active --quiet cups-browsed.service 2>/dev/null; then
-  sudo systemctl stop cups-browsed.service
-fi
+# Artix does not ship a maintained dinit service for cups-browsed. Stop an
+# existing legacy process before changing its authorization; the following
+# migration removes automatic discovery altogether.
+sudo pkill -x cups-browsed 2>/dev/null || true
 
 if omarchy-pkg-present cups; then
-  sudo systemctl daemon-reload
-  sudo systemctl try-reload-or-restart cups.service
-fi
-
-# Resume on whether the unit is enabled, not on whether it was running when this
-# run started: an interrupted earlier run leaves it stopped, and a retry that
-# recomputed that would skip the restart and still write the marker below. A
-# masked or disabled unit reports not-enabled and is left alone.
-if systemctl is-enabled --quiet cups-browsed.service 2>/dev/null; then
-  sudo systemctl restart cups-browsed.service
+  sudo dinitctl restart cups
 fi
 
 sudo install -Dm644 /dev/null "$machine_marker"

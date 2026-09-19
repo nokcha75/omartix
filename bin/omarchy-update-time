@@ -4,4 +4,5 @@
 # omarchy:requires-sudo=true
 
 echo "Updating time..."
-sudo systemctl restart systemd-timesyncd
+# ntpd's -q mode synchronizes once and exits.
+sudo ntpd -gq

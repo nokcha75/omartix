@@ -1,9 +1,13 @@
+#!/bin/bash
+
+set -euo pipefail
+
 echo "Normalize Snapper snapshot services"
 
 OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
-snapper_config_script=/usr/share/omarchy/install/config/snapper.sh
+snapper_config_script=/usr/share/omarchy/install/dinit/config/snapper.sh
 if [[ ! -f $snapper_config_script ]]; then
-  snapper_config_script="$OMARCHY_PATH/install/config/snapper.sh"
+  snapper_config_script="$OMARCHY_PATH/install/dinit/config/snapper.sh"
 fi
 
 as_root() {
@@ -14,26 +18,23 @@ as_root() {
   fi
 }
 
-unit_enabled() {
-  systemctl is-enabled --quiet "$1" >/dev/null 2>&1
-}
-
-unit_active() {
-  systemctl is-active --quiet "$1" >/dev/null 2>&1
-}
-
-needs_repair=0
-
-[[ -f /etc/snapper/configs/root ]] || needs_repair=1
-
-if ! unit_enabled snapper-cleanup.timer || ! unit_active snapper-cleanup.timer; then
-  needs_repair=1
+if ! error=$(omarchy-pkg-add limine-snapper-sync limine-snapper-sync-dinit 2>&1); then
+  echo "Could not install Artix Limine snapshot-sync packages: $error"
+  echo "The Snapper migration will be retried by omarchy-migrate."
+  exit 1
 fi
 
-if ! unit_enabled limine-snapper-sync.service || ! unit_active limine-snapper-sync.service; then
-  needs_repair=1
+if ! error=$(as_root env OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$snapper_config_script" 2>&1); then
+  echo "Could not configure Snapper: $error"
+  echo "The Snapper migration will be retried by omarchy-migrate."
+  exit 1
 fi
 
-(( needs_repair )) || exit 0
-
-as_root env OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$snapper_config_script"
+for service in omarchy-snapper-cleanup limine-snapper-sync; do
+  if ! error=$(as_root dinitctl enable "$service" 2>&1) ||
+    ! error=$(as_root dinitctl start "$service" 2>&1); then
+    echo "Could not enable $service through dinit: $error"
+    echo "The Snapper migration will be retried by omarchy-migrate."
+    exit 1
+  fi
+done

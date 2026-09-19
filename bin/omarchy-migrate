@@ -31,6 +31,13 @@ done
 OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 STATE_DIR="${OMARCHY_MIGRATION_STATE:-$HOME/.local/state/omarchy/migrations}"
 MIGRATIONS_DIR="$OMARCHY_PATH/migrations"
+ARTIX_SKIP_FILE="$MIGRATIONS_DIR/artix-skip.txt"
+
+artix_skipped() {
+  local name=$1
+  [[ -f $ARTIX_SKIP_FILE ]] || return 1
+  grep -Fxq "$name" "$ARTIX_SKIP_FILE"
+}
 
 migration_entries() {
   [[ -d $MIGRATIONS_DIR ]] || return 0
@@ -49,6 +56,7 @@ pending_migrations() {
 
   while IFS=$'\t' read -r name file marker; do
     [[ -n $name ]] || continue
+    artix_skipped "$name" && continue
     if [[ ! -f $marker ]]; then
       printf '%s\n' "$name"
     fi
@@ -89,9 +97,13 @@ while IFS=$'\t' read -r name file marker <&3; do
   [[ -n $name ]] || continue
 
   if [[ ! -f $marker ]]; then
+    mkdir -p "$(dirname "$marker")"
+    if artix_skipped "$name"; then
+      touch "$marker"
+      continue
+    fi
     echo -e "\e[32m\nRunning migration (${name%.sh})\e[0m"
     OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$file" 3<&-
-    mkdir -p "$(dirname "$marker")"
     touch "$marker"
   fi
 done 3< <(migration_entries)

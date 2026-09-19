@@ -1,3 +1,7 @@
+#!/bin/bash
+
+set -euo pipefail
+
 echo "Update T2 Mac suspend, Touch Bar, and fan defaults"
 
 if ! lspci -nn | grep "106b:180[12]" >/dev/null; then
@@ -34,7 +38,9 @@ fi
 # The kernel's built-in Boot Camp-style Touch Bar works without tiny-dfr. The
 # optional daemon holds stale device descriptors across suspend with t2bce.
 if omarchy-pkg-present tiny-dfr; then
-  sudo systemctl disable --now tiny-dfr.service || true
+  # tiny-dfr is not an Artix service. Stop a leftover process directly before
+  # removing the obsolete package, without introducing a service-manager path.
+  pkill -x tiny-dfr >/dev/null 2>&1 || true
   omarchy-pkg-drop tiny-dfr
 fi
 

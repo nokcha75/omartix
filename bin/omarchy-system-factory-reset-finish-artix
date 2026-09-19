@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# omarchy:hidden=true
+# omarchy:summary=Finish a factory reset before Omartix dinit starts SDDM
+
+set -euo pipefail
+
+for mountpoint in /home /var/log; do
+  mountpoint -q "$mountpoint" && umount "$mountpoint"
+done
+
+/usr/bin/omarchy-system-factory-reset-finish
+mount /home
+mount /var/log

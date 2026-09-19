@@ -68,4 +68,8 @@ The Apple T2 Security Chip was introduced in 2017. The T2 chip was discontinued 
 - MacBook Pro 13-inch (2020, two Thunderbolt 3 ports) – Model: A2265
 - MacBook Pro 15-inch (2020) – Model: A1990
 
-On these models, the installer automatically sets up the patched `linux-t2` kernel, the T2 audio configuration, Apple's Broadcom Wi-Fi/Bluetooth firmware, and fan control via `t2fanrd`. The Touch Bar runs on the kernel's built-in Boot Camp-style support.
+T2-specific support is currently unavailable on Omartix: Artix does not yet
+provide the complete `linux-t2` stack and a maintained `t2fanrd` dinit
+service. This is a deliberate compatibility boundary rather than a partial
+installation; see [dinit compatibility](../docs/dinit-compatibility.md) for
+the restoration condition.

@@ -1,0 +1,9 @@
+# Start the Omarchy live installer rather than a generic Artix desktop.
+# openvt gives the process a real tty1, which is an explicit contract of
+# /root/.automated_script.sh and ensures gum receives keyboard input there.
+# Wait for the child so dinit tracks the installer for its full lifetime rather
+# than reporting this service stopped as soon as openvt has spawned it.
+type = process
+command = /usr/bin/openvt -c 1 -f -w -- /root/.automated_script.sh
+restart = false
+depends-on = local.target

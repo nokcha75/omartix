@@ -1171,7 +1171,7 @@ install_windows() {
 [Desktop Entry]
 Name=Windows
 Comment=Start Windows VM via Docker and connect with RDP
-Exec=uwsm app -- omarchy-windows-vm launch
+Exec=omartix-app -- omarchy-windows-vm launch
 Icon=windows
 Terminal=false
 Type=Application
@@ -1303,8 +1303,10 @@ EOF
     exit 1
   fi
 
-  local tz
-  tz=$(timedatectl show -p Timezone --value 2>/dev/null || echo UTC)
+  local tz timezone_path
+  timezone_path=$(readlink -f /etc/localtime 2>/dev/null || true)
+  tz=${timezone_path#/usr/share/zoneinfo/}
+  [[ -n $tz && -f /usr/share/zoneinfo/$tz ]] || tz=UTC
 
   # Write the root-owned compose from the validated settings (one prompt if
   # sudoless Docker is off). The writer pins the familiar home directories (or
@@ -1330,7 +1332,7 @@ EOF
   if ! priv up; then
     echo "❌ Failed to start Windows VM!"
     echo "   Common issues:"
-    echo "   - Docker daemon not running: sudo systemctl start docker"
+    echo "   - Docker daemon not running: sudo dinitctl start dockerd"
     echo "   - Port already in use: check if another VM is running"
     exit 1
   fi

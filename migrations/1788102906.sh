@@ -37,10 +37,8 @@ as_root() {
 # udev runs RUN+= as root, and
 # ~/.local/share/omarchy is a symlink that same unprivileged user owns: replacing
 # it with a tree of their own and provoking a power_supply event runs their code
-# as root. Quattro ships the rules as 99-omarchy-*.rules under /usr/bin, but the
-# one-shot migration that swept the old filenames was itself dropped, so an
-# install that came up through the 3.x line keeps the old file until this
-# migration removes it.
+# as root. Omartix ships the rules as 99-omarchy-*.rules under /usr/bin, but an
+# older one-shot cleanup missed these filenames, so remove them defensively.
 #
 # Pre-4 layout work normally belongs in the Omarchy 4 upgrade command, but that
 # command only runs on a machine still making the crossing, so an install that
